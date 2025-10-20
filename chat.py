@@ -6,62 +6,31 @@ import streamlit as st
 from dotenv import load_dotenv
 from llm import get_ai_response
 
-# --- 경로 설정: chat.py가 있는 폴더/이미지 폴더 ---
+# --- 기본 설정 ---
 APP_DIR = Path(__file__).resolve().parent
-IMG_DIR = APP_DIR / "md_images"
-
 st.set_page_config(page_title="무역관 정산 챗봇", page_icon="💰")
 st.title("💰무역관 정산 챗봇")
 st.caption("해외무역관 정산에 대한 모든 것을 물어보세요!")
 
 load_dotenv()
 
-# --- 유틸: 이미지 경로 변환/정렬, 중복 제거(순서 보존) ---
-def _resolve_image_paths(img_list):
-    """상대 파일명을 md_images/ 경로로 변환"""
-    paths = []
-    for name in img_list or []:
-        name = str(name).strip().lstrip("/\\")
-        p = (IMG_DIR / name)
-        paths.append(p.as_posix())
-    return paths
-
-def _natural_sort_key(s: str):
-    """파일명 안 숫자 기준 자연스러운 정렬 키"""
-    nums = re.findall(r'\d+', s or "")
-    return [int(n) for n in nums] if nums else [float('inf')]
-
-def _dedup_preserve_order(items):
-    """중복 제거하되, 최초 등장 순서를 보존"""
-    seen = set()
-    result = []
-    for x in items or []:
-        if x not in seen:
-            seen.add(x)
-            result.append(x)
-    return result
-
-# --- 이전 대화 기록과 출처/이미지 함께 출력 ---
-if 'message_list' not in st.session_state:
+# --- 이전 대화 기록 표시 ---
+if "message_list" not in st.session_state:
     st.session_state.message_list = []
 
 for message in st.session_state.message_list:
     with st.chat_message(message["role"]):
         st.write(message["content"])
-        if message["role"] == "ai" and "source" in message and message["source"]:
+        if message["role"] == "ai" and message.get("source"):
             st.caption(message["source"])
-        # ✅ AI 메시지에 이미지가 있으면 실제 이미지로 렌더
-        if message["role"] == "ai":
-            for img_path in _resolve_image_paths(message.get("images", [])):
-                st.image(img_path, width='stretch')  # use_container_width → width='stretch'
 
 # --- 사용자 입력 처리 ---
-if user_question := st.chat_input(placeholder="해외무역관 정산에 대한 궁금한 내용을 물어보세요"):
+if user_question := st.chat_input("해외무역관 정산에 대한 궁금한 내용을 물어보세요"):
     st.session_state.message_list.append({"role": "user", "content": user_question})
-    st.session_state.message_list.append({"role": "ai", "content": "", "source": None, "images": []})
+    st.session_state.message_list.append({"role": "ai", "content": "", "source": None})
     st.rerun()
 
-# --- 스트리밍 실행 조건 ---
+# --- 스트리밍 실행 ---
 if (
     st.session_state.message_list
     and st.session_state.message_list[-1]["role"] == "ai"
@@ -69,57 +38,116 @@ if (
 ):
     user_question = st.session_state.message_list[-2]["content"]
 
+    # ---- page_num 포맷 함수 ----
+    def _format_page_token(page_val):
+        """
+        포맷 규칙:
+        - 숫자(int) 또는 '7', '7.0', '07.00' 등 숫자 형태 → '7p'
+        - 문자 섞인 경우 원문 그대로 유지 ('2조 목적' 등)
+        """
+        if page_val is None:
+            return None
+
+        # int → '3p'
+        if isinstance(page_val, int):
+            return f"{page_val}p"
+
+        s = str(page_val).strip()
+        if not s:
+            return None
+
+        # float 형태 문자열 ('7.0', '3.00') → int로 변환 후 p
+        try:
+            num = float(s)
+            # 정수형(float지만 .0으로 끝나는 경우)
+            if num.is_integer():
+                return f"{int(num)}p"
+        except ValueError:
+            pass
+
+        # 순수 숫자 문자열 ('12') → '12p'
+        if re.fullmatch(r"\d+", s):
+            return f"{s}p"
+
+        # 문자 섞임 ('2조 목적', 'p.12' 등) → 그대로
+        return s
+
+    # ---- 순서 보존 중복제거 ----
+    def _dedup_preserve_order(items):
+        seen = set()
+        out = []
+        for x in items:
+            if x is None:
+                continue
+            if x not in seen:
+                seen.add(x)
+                out.append(x)
+        return out
+
+    # ---- 파일명 정제 ----
+    def _resolve_pdf_name(metadata: dict):
+        name = (metadata or {}).get("origin_pdf") or (metadata or {}).get("source") or "알 수 없음"
+        try:
+            return Path(str(name)).name
+        except Exception:
+            return str(name)
+
     with st.spinner("답변을 생성하는 중입니다..."):
         ai_response_stream = get_ai_response(user_question)
 
         full_answer = ""
         source_info = None
-        collected_images = []  # ✅ 유사도 순서(문서 순서)를 유지하여 모음
 
-        # 스트리밍 처리
+        # 문서별 페이지 수집 구조
+        origins_order = []
+        pages_by_origin = {}
+        seen_pairs = set()
+
         for chunk in ai_response_stream:
+            # ---- 컨텍스트(문서)에서 출처 정보 수집
             if "context" in chunk and source_info is None:
-                docs = chunk["context"]
-                if docs:
-                    # 1) origin_pdf는 가장 유사한 문서(첫 문서) 기준으로 1개만
-                    first_doc = docs[0]
-                    pdf_name = getattr(first_doc, "metadata", {}).get("origin_pdf", "없음")
+                docs = chunk["context"] or []
+                for d in docs[:2]:  # 유사도 높은 순 2개 문서
+                    md = getattr(d, "metadata", {}) or {}
+                    origin = _resolve_pdf_name(md)
+                    page_token = _format_page_token(md.get("page_num"))
+                    if not page_token:
+                        continue
 
-                    # 2) 페이지 번호: '유사도 순서' 유지 (정렬 X), 중복만 제거
-                    page_nums_in_rank_order = []
-                    for d in docs[:2]:
-                        md = getattr(d, "metadata", {}) or {}
+                    pair = (origin, page_token)
+                    if pair in seen_pairs:
+                        continue
+                    seen_pairs.add(pair)
 
-                        # 페이지 번호 수집 (유사도 순서 유지)
-                        p = md.get("page_num")
-                        try:
-                            p = int(p)
-                            if p not in page_nums_in_rank_order:
-                                page_nums_in_rank_order.append(p)
-                        except (TypeError, ValueError):
-                            pass
+                    if origin not in pages_by_origin:
+                        pages_by_origin[origin] = []
+                        origins_order.append(origin)
 
-                        # 3) 이미지 수집:
-                        #    - 문서 내부는 natural sort
-                        #    - 문서들 간 전체 순서는 '유사도 순' 유지
-                        imgs = md.get("images") or []
-                        imgs = [im.strip() for im in imgs if isinstance(im, str) and im.strip()]
-                        imgs = sorted(imgs, key=_natural_sort_key)
-                        collected_images.extend(imgs)
+                    if page_token not in pages_by_origin[origin]:
+                        pages_by_origin[origin].append(page_token)
 
-                    # 4) 출처 포맷: '8p, 3p / 파일명.pdf' (유사도 순서 유지)
-                    pages_str = ", ".join(f"{p}p" for p in page_nums_in_rank_order)
-                    source_info = f"📄 출처: {pages_str} / {pdf_name}"
+                # ---- 표기 문자열 구성
+                if origins_order:
+                    parts = []
+                    for origin in origins_order:
+                        pages = _dedup_preserve_order(pages_by_origin.get(origin, []))
+                        if not pages:
+                            continue
+                        # 여러 페이지면 "a, b (파일명)", 하나면 "a (파일명)"
+                        pages_str = ", ".join(pages)
+                        parts.append(f"{pages_str} ({origin})")
+                    if parts:
+                        source_info = "📄출처: " + ", ".join(parts)
+                    else:
+                        source_info = "📄출처: 페이지 정보 없음"
+                else:
+                    source_info = "📄출처: 페이지 정보 없음"
 
+            # ---- 답변 스트림 이어붙이기
             if "answer" in chunk:
                 full_answer += chunk["answer"]
 
-        # 5) 이미지 중복 제거(순서 보존: 유사도 높은 문서의 이미지가 앞에 오도록)
-        collected_images = _dedup_preserve_order(collected_images)
-
-        # 세션 업데이트
+        # ---- 세션 업데이트
         st.session_state.message_list[-1]["content"] = full_answer
         st.session_state.message_list[-1]["source"] = source_info
-        st.session_state.message_list[-1]["images"] = collected_images
-
         st.rerun()
