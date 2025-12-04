@@ -14,6 +14,40 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 
 from config import answer_examples
 
+PRIORITY_ORIGIN = "해외조직망정산지침"
+
+class PriorityRetriever(BaseRetriever):
+    """
+    origin_pdf가 '해외조직망정산지침'인 문서를 항상 앞으로 보내고,
+    나머지 문서는 뒤로 보내는 래퍼 retriever.
+    같은 그룹 안에서는 원래 similarity 순서를 유지한다.
+    """
+    base_retriever: Any
+
+    def _get_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager=None,
+    ) -> List[Document]:
+        docs = self.base_retriever.get_relevant_documents(query)
+        docs.sort(
+            key=lambda d: 0 if d.metadata.get("origin_pdf") == PRIORITY_ORIGIN else 1
+        )
+        return docs
+
+    async def _aget_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager=None,
+    ) -> List[Document]:
+        docs = await self.base_retriever.aget_relevant_documents(query)
+        docs.sort(
+            key=lambda d: 0 if d.metadata.get("origin_pdf") == PRIORITY_ORIGIN else 1
+        )
+        return docs
+    
 store = {}
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
@@ -23,11 +57,23 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
 
 
 def get_retriever():
-    embedding = OpenAIEmbeddings(model = 'text-embedding-3-large') # 임베딩 모델을 large로 바꿔주기
+    embedding = OpenAIEmbeddings(model='text-embedding-3-large')
     index_name = 'finance-new-index'
-    database = PineconeVectorStore.from_existing_index(index_name=index_name, embedding=embedding)
-    retriever = database.as_retriever(search_kwargs={"k": 2}) 
-    return retriever
+    database = PineconeVectorStore.from_existing_index(
+        index_name=index_name,
+        embedding=embedding,
+    )
+
+    # 1) 기존 similarity 기반 retriever 생성
+    base_retriever = database.as_retriever(
+        search_type="similarity",   # 점수순
+        search_kwargs={"k": 3},     # k 고정
+    )
+
+    # 2) 정산지침(해외조직망정산지침) 우선 retriever로 감싸기
+    priority_retriever = PriorityRetriever(base_retriever=base_retriever)
+
+    return priority_retriever
 
 
 def get_history_retriever():
@@ -57,7 +103,7 @@ def get_history_retriever():
     return history_aware_retriever
     
     
-def get_llm(model = 'gpt-4o'):
+def get_llm(model = 'gpt-5.1'):
     llm = ChatOpenAI(model = model)
     return llm
 
@@ -109,7 +155,7 @@ def get_rag_chain(): # 챗봇의 엔진
     
 
 def get_ai_response(user_message): # 1. 챗봇의 시작: 사용자 질문을 받음
-    qa_chain = get_rag_chain() # 2. 챗봇의 핵심 기능(RAG Chain)을 불러옵니다. 
+    qa_chain = get_rag_chain()     # 2. 챗봇의 핵심 기능(RAG Chain)을 불러옵니다. 
     ai_response = qa_chain.stream( # 3. 사용자 메시지를 넣어 답변을 스트리밍 방식으로 받습니다.
         {
             "input": user_message
