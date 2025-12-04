@@ -133,13 +133,11 @@ if (
                         pages = _dedup_preserve_order(pages_by_origin.get(origin, []))
                         if not pages:
                             continue
-                        # 여러 페이지면 "(파일명) a, b", 하나면 "(파일명) a"
+                        # 여러 페이지면 "a, b (파일명)", 하나면 "a (파일명)"
                         pages_str = ", ".join(pages)
-                        # ✅ 문서명이 먼저 나오고, 그 뒤에 페이지
-                        parts.append(f"({origin}) {pages_str}")
+                        parts.append(f"{pages_str} ({origin})")
                     if parts:
-                        # ✅ 문서 사이 구분자를 ", " 대신 " / "로 변경
-                        source_info = "📄출처: " + " / ".join(parts)
+                        source_info = "📄출처: " + ", ".join(parts)
                     else:
                         source_info = "📄출처: 페이지 정보 없음"
                 else:

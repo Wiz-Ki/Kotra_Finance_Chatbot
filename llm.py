@@ -8,11 +8,16 @@ from langchain_pinecone import PineconeVectorStore
 #from langchain.chains import RetrievalQA 
 #from langchain import hub 
 
+from langchain_core.retrievers import BaseRetriever   # ← 이 줄 추가
+from langchain.schema import Document                 # ← 이 줄 추가
+from typing import Any, List
+
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
 from config import answer_examples
+ 
 
 PRIORITY_ORIGIN = "해외조직망정산지침"
 
@@ -122,9 +127,9 @@ def get_rag_chain(): # 챗봇의 엔진
         examples=answer_examples,
     )
     system_prompt = (
-        "당신은 회사 재무팀에서 근무하는 해외무역관 정산 전문가입니다. 정산에 관한 질문에 답변해주세요"
-        "아래에 제공된 문서를 활용해서 답변해주시고"
-        "답변을 알 수 없다면 자료에 없음이라고 답변해주세요"
+        "당신은 회사 재무팀에서 근무하는 해외무역관 정산 전문가입니다."
+        "아래에 제공된 문서를 참고해서 질문에 답변해주시고"
+        "정말로 전혀 관련 규정이나 설명을 찾을 수 없을 때만 자료에 없음이라고 답변해주세요"
         "\n\n"
         "{context}"
     )
