@@ -5,12 +5,52 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 from llm import get_ai_response
+from st_copy_to_clipboard import st_copy_to_clipboard  # [추가됨] 복사 기능 임포트
 
 # --- 기본 설정 ---
 APP_DIR = Path(__file__).resolve().parent
 st.set_page_config(page_title="무역관 정산 챗봇", page_icon="💰")
+
+# --------------------------------------------------------------------------
+# [추가됨] 비밀번호 확인 함수
+# --------------------------------------------------------------------------
+def check_password():
+    """비밀번호가 맞는지 확인하여 True/False를 반환하는 함수"""
+    
+    # 1. 세션에 비밀번호 확인 여부 변수가 없으면 초기화
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+
+    # 2. 이미 비밀번호를 맞췄다면 True 반환 (바로 접속)
+    if st.session_state["password_correct"]:
+        return True
+
+    # 3. 비밀번호 입력 화면 출력
+    st.header("🔒 접근 제한")
+    st.write("무역관 정산 챗봇에 접속하려면 비밀번호를 입력하세요.")
+    
+    password_input = st.text_input("비밀번호", type="password")
+
+    if password_input:
+        # Streamlit Cloud의 Secrets에 저장된 "PASSWORD"와 비교
+        if password_input == st.secrets["PASSWORD"]:
+            st.session_state["password_correct"] = True
+            st.rerun()  # 비밀번호가 맞으면 화면을 새로고침하여 앱 실행
+        else:
+            st.error("비밀번호가 틀렸습니다. 다시 시도해주세요.")
+
+    return False
+
+# --------------------------------------------------------------------------
+# [추가됨] 로그인 체크 실행
+# 비밀번호가 확인되지 않으면 여기서 코드 실행을 멈춥니다 (st.stop)
+# --------------------------------------------------------------------------
+if not check_password():
+    st.stop()
+# --------------------------------------------------------------------------
+    
 st.title("💰무역관 정산 챗봇")
-st.caption("해외무역관 정산에 대한 모든 것을 물어보세요!")
+st.caption("더 정확한 답변을 위해 사우님들의 피드백이 필요해요 🌱 답변 우측 하단의 [좋아요👍/싫어요👎] 꼭 눌러주세요!")
 
 load_dotenv()
 
@@ -23,6 +63,61 @@ for message in st.session_state.message_list:
         st.write(message["content"])
         if message["role"] == "ai" and message.get("source"):
             st.caption(message["source"])
+
+# --------------------------------------------------------------------------
+# [수정됨] 안내 문구 및 레이아웃 수정
+# 1. 입력창이 내용을 가리지 않도록 본문 하단에 여백(Padding) 추가
+# 2. 입력창을 위로 올리고, 그 아래에 안내 문구 배치
+# --------------------------------------------------------------------------
+st.markdown(
+    """
+    <style>
+        /* [핵심] 본문 내용이 가려지지 않도록 하단 여백 확보 */
+        /* 입력창 높이(약 50px) + 안내문구 높이(50px) + 여유분 */
+        .main .block-container {
+            padding-bottom: 120px !important;
+        }
+
+        /* 1. 채팅 입력창(stChatInput) 디자인 및 위치 조정 */
+        [data-testid="stChatInput"] {
+            bottom: 50px !important; /* 안내 문구 높이만큼 위로 띄움 */
+            background-color: transparent !important; /* 배경색 투명하게 */
+        }
+        
+        /* (선택사항) 입력창 주변의 붕 뜬 그림자나 경계선 제거가 필요하면 추가 */
+        [data-testid="stChatInput"] > div {
+            border-color: transparent !important;
+        }
+
+        /* 2. 안내 문구 영역 (화면 최하단 고정) */
+        .footer-disclaimer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 95px;
+            background-color: #ffffff; /* 배경을 흰색으로 채워서 뒤가 비치지 않게 함 */
+            color: #888888;
+            text-align: center;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100; /* 맨 위에 표시 */
+            border-top: 1px solid #f0f0f0; /* 상단에 얇은 구분선 */
+        }
+    </style>
+
+    <div class="footer-disclaimer">
+        <div>
+            저는 아직 배우는 중이라 실수가 있을 수 있어요! 😅 <br>
+            답변은 참고만 해주시고, 헷갈리는 부분은 꼭 재무팀 담당자분들께 확인 부탁드려요.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+# --------------------------------------------------------------------------
 
 # --- 사용자 입력 처리 ---
 if user_question := st.chat_input("해외무역관 정산에 대한 궁금한 내용을 물어보세요"):

@@ -35,7 +35,7 @@ class PriorityRetriever(BaseRetriever):
         *,
         run_manager=None,
     ) -> List[Document]:
-        docs = self.base_retriever.get_relevant_documents(query)
+        docs = self.base_retriever.invoke(query)
         docs.sort(
             key=lambda d: 0 if d.metadata.get("origin_pdf") == PRIORITY_ORIGIN else 1
         )
@@ -47,7 +47,7 @@ class PriorityRetriever(BaseRetriever):
         *,
         run_manager=None,
     ) -> List[Document]:
-        docs = await self.base_retriever.aget_relevant_documents(query)
+        docs = await self.base_retriever.ainvoke(query)
         docs.sort(
             key=lambda d: 0 if d.metadata.get("origin_pdf") == PRIORITY_ORIGIN else 1
         )
