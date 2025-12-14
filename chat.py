@@ -5,7 +5,7 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 from llm import get_ai_response
-from st_copy_to_clipboard import st_copy_to_clipboard  # [추가됨] 복사 기능 임포트
+
 
 # --- 기본 설정 ---
 APP_DIR = Path(__file__).resolve().parent
