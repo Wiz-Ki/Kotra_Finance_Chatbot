@@ -1,113 +1,170 @@
-# chat.py
-
 import re
 from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 from llm import get_ai_response
 
+# 구글 시트 및 피드백 관련 라이브러리
+from streamlit_feedback import streamlit_feedback
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+import uuid
+import pytz # [필수] 시간대 처리를 위해 추가
 
 # --- 기본 설정 ---
 APP_DIR = Path(__file__).resolve().parent
 st.set_page_config(page_title="무역관 정산 챗봇", page_icon="💰")
 
 # --------------------------------------------------------------------------
-# [추가됨] 비밀번호 확인 함수
+# [설정] 무역관별 시간대 매핑 (필요한 만큼 추가하세요)
 # --------------------------------------------------------------------------
-def check_password():
-    """비밀번호가 맞는지 확인하여 True/False를 반환하는 함수"""
-    
-    # 1. 세션에 비밀번호 확인 여부 변수가 없으면 초기화
-    if "password_correct" not in st.session_state:
-        st.session_state["password_correct"] = False
+# IANA Timezone Database 이름을 사용합니다.
+BRANCH_TIMEZONES = {
+    "뉴욕무역관": "America/New_York",
+    "도쿄무역관": "Asia/Tokyo",
+    "상하이무역관": "Asia/Shanghai",
+    "프랑크푸르트무역관": "Europe/Berlin",
+    "런던무역관": "Europe/London",
+    "본사": "Asia/Seoul",
+    "기타": "Asia/Seoul" # 기본값
+}
 
-    # 2. 이미 비밀번호를 맞췄다면 True 반환 (바로 접속)
-    if st.session_state["password_correct"]:
-        return True
+# --------------------------------------------------------------------------
+# [기능 1] 구글 시트 연동 함수
+# --------------------------------------------------------------------------
+@st.cache_resource
+def get_google_sheet():
+    try:
+        credentials_dict = st.secrets["gcp_service_account"]
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
+        client = gspread.authorize(creds)
+        
+        # [중요] 시트 이름 확인
+        return client.open("정산챗봇로그").sheet1
+    except Exception as e:
+        print(f"구글 시트 연결 오류: {e}")
+        return None
 
-    # 3. 비밀번호 입력 화면 출력
-    st.header("🔒 접근 제한")
-    st.write("무역관 정산 챗봇에 접속하려면 비밀번호를 입력하세요.")
-    
-    password_input = st.text_input("비밀번호", type="password")
+def save_interaction(user_session_id, branch_name, question, answer):
+    """
+    저장 순서: [ID, 세션ID, 무역관, 질문, 답변, 피드백(공란), 의견(공란), 현지시간, 한국시간]
+    """
+    try:
+        sheet = get_google_sheet()
+        if sheet:
+            unique_id = str(uuid.uuid4())
+            
+            # 1. 기준 시간(UTC) 구하기
+            utc_now = datetime.now(pytz.utc)
+            
+            # 2. 한국 시간(KST) 변환
+            kst_tz = pytz.timezone('Asia/Seoul')
+            kst_time_str = utc_now.astimezone(kst_tz).strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 3. 현지 시간(Local) 변환
+            # 선택한 무역관의 시간대를 가져오고, 없으면 '본사(서울)' 시간대로 처리
+            target_tz_name = BRANCH_TIMEZONES.get(branch_name, 'Asia/Seoul')
+            try:
+                local_tz = pytz.timezone(target_tz_name)
+                local_time_str = utc_now.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
+            except:
+                # 혹시 시간대 이름 오타 등으로 에러나면 KST로 저장
+                local_time_str = kst_time_str
 
-    if password_input:
-        # Streamlit Cloud의 Secrets에 저장된 "PASSWORD"와 비교
-        if password_input == st.secrets["PASSWORD"]:
-            st.session_state["password_correct"] = True
-            st.rerun()  # 비밀번호가 맞으면 화면을 새로고침하여 앱 실행
-        else:
-            st.error("비밀번호가 틀렸습니다. 다시 시도해주세요.")
+            # [수정됨] 현지시간, 한국시간 순서로 저장
+            row_data = [unique_id, user_session_id, branch_name, question, answer, "", "", local_time_str, kst_time_str]
+            
+            sheet.append_row(row_data)
+            return unique_id
+    except Exception as e:
+        print(f"저장 실패: {e}")
+    return None
 
+def update_feedback(unique_id, feedback_score, feedback_text):
+    try:
+        sheet = get_google_sheet()
+        if sheet:
+            # 1. ID가 있는 행 찾기 (A열 = 1번째 열)
+            cell = sheet.find(unique_id, in_column=1)
+            
+            # 업데이트 위치: 6번째(F열):피드백, 7번째(G열):의견
+            # (시간 컬럼이 뒤에 추가된 것이라 피드백 컬럼 위치는 변하지 않았음)
+            sheet.update_cell(cell.row, 6, feedback_score)
+            text_to_save = feedback_text if feedback_text else ""
+            sheet.update_cell(cell.row, 7, text_to_save)
+            return True
+    except Exception as e:
+        print(f"업데이트 실패: {e}")
     return False
 
 # --------------------------------------------------------------------------
-# [추가됨] 로그인 체크 실행
-# 비밀번호가 확인되지 않으면 여기서 코드 실행을 멈춥니다 (st.stop)
+# [기능 2] 로그인 (무역관 선택 + 비밀번호)
 # --------------------------------------------------------------------------
-if not check_password():
-    st.stop()
-# --------------------------------------------------------------------------
+def check_login():
+    if "login_success" not in st.session_state:
+        st.session_state["login_success"] = False
+    if "user_branch" not in st.session_state:
+        st.session_state["user_branch"] = ""
+
+    if st.session_state["login_success"]:
+        return True
+
+    st.header("🔒 무역관 정산 챗봇 로그인")
+    st.write("소속 무역관을 선택하고 비밀번호를 입력해주세요.")
     
+    # [설정] 무역관 목록 (여기에 있는 이름이 위 BRANCH_TIMEZONES 키와 같아야 시간이 정확함)
+    branch_options = ["선택해주세요"] + list(BRANCH_TIMEZONES.keys()) # 사전 키를 그대로 목록으로 사용
+    
+    selected_branch = st.selectbox("소속 무역관", branch_options)
+    password_input = st.text_input("비밀번호", type="password")
+    
+    if st.button("접속하기") or password_input:
+        if selected_branch == "선택해주세요":
+            st.warning("⚠️ 소속 무역관을 선택해주세요!")
+            return False
+            
+        if password_input == st.secrets["PASSWORD"]:
+            st.session_state["login_success"] = True
+            st.session_state["user_branch"] = selected_branch
+            st.rerun()
+        else:
+            st.error("❌ 비밀번호가 틀렸습니다.")
+            
+    return False
+
+if not check_login():
+    st.stop()
+
+# --------------------------------------------------------------------------
+# [메인] 앱 UI 시작
+# --------------------------------------------------------------------------
 st.title("💰무역관 정산 챗봇")
-st.caption("더 정확한 답변을 위해 사우님들의 피드백이 필요해요 🌱 답변 우측 하단의 [좋아요👍/싫어요👎] 꼭 눌러주세요!")
+st.caption(f"환영합니다! **{st.session_state.user_branch}** 담당자님 👋 서비스 개선을 위해 답변 하단의 **[좋아요👍/싫어요👎]**를 꼭 눌러주세요!")
 
 load_dotenv()
 
-# --- 이전 대화 기록 표시 ---
+if "user_session_id" not in st.session_state:
+    st.session_state.user_session_id = str(uuid.uuid4())
+
 if "message_list" not in st.session_state:
     st.session_state.message_list = []
 
-for message in st.session_state.message_list:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
-        if message["role"] == "ai" and message.get("source"):
-            st.caption(message["source"])
-
-# --------------------------------------------------------------------------
-# [수정됨] 안내 문구 및 레이아웃 수정
-# 1. 입력창이 내용을 가리지 않도록 본문 하단에 여백(Padding) 추가
-# 2. 입력창을 위로 올리고, 그 아래에 안내 문구 배치
-# --------------------------------------------------------------------------
+# --- 스타일 설정 ---
 st.markdown(
     """
     <style>
-        /* [핵심] 본문 내용이 가려지지 않도록 하단 여백 확보 */
-        /* 입력창 높이(약 50px) + 안내문구 높이(50px) + 여유분 */
-        .main .block-container {
-            padding-bottom: 120px !important;
-        }
-
-        /* 1. 채팅 입력창(stChatInput) 디자인 및 위치 조정 */
-        [data-testid="stChatInput"] {
-            bottom: 50px !important; /* 안내 문구 높이만큼 위로 띄움 */
-            background-color: transparent !important; /* 배경색 투명하게 */
-        }
-        
-        /* (선택사항) 입력창 주변의 붕 뜬 그림자나 경계선 제거가 필요하면 추가 */
-        [data-testid="stChatInput"] > div {
-            border-color: transparent !important;
-        }
-
-        /* 2. 안내 문구 영역 (화면 최하단 고정) */
+        .main .block-container { padding-bottom: 120px !important; }
+        [data-testid="stChatInput"] { bottom: 50px !important; background-color: transparent !important; }
+        [data-testid="stChatInput"] > div { border-color: transparent !important; }
         .footer-disclaimer {
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            height: 95px;
-            background-color: #ffffff; /* 배경을 흰색으로 채워서 뒤가 비치지 않게 함 */
-            color: #888888;
-            text-align: center;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100; /* 맨 위에 표시 */
-            border-top: 1px solid #f0f0f0; /* 상단에 얇은 구분선 */
+            position: fixed; left: 0; bottom: 0; width: 100%; height: 95px;
+            background-color: #ffffff; color: #888888; text-align: center;
+            font-size: 12px; display: flex; align-items: center; justify-content: center;
+            z-index: 100; border-top: 1px solid #f0f0f0;
         }
     </style>
-
     <div class="footer-disclaimer">
         <div>
             저는 아직 배우는 중이라 실수가 있을 수 있어요! 😅 <br>
@@ -117,15 +174,41 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-# --------------------------------------------------------------------------
+
+# --- 대화 기록 및 피드백 버튼 ---
+for i, message in enumerate(st.session_state.message_list):
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+        
+        if message["role"] == "ai":
+            if message.get("source"):
+                st.caption(message["source"])
+            
+            if message["content"] and message.get("row_id"):
+                feedback_key = f"feedback_{i}" 
+                feedback = streamlit_feedback(
+                    feedback_type="thumbs",
+                    optional_text_label="[선택] 의견 남기기",
+                    key=feedback_key,
+                    align="flex-start"
+                )
+
+                if feedback:
+                    score = feedback["score"]
+                    text = feedback.get("text")
+                    target_row_id = message["row_id"]
+                    
+                    if target_row_id:
+                        update_feedback(target_row_id, score, text)
+                        st.toast("피드백이 반영되었습니다!", icon="✅")
 
 # --- 사용자 입력 처리 ---
 if user_question := st.chat_input("해외무역관 정산에 대한 궁금한 내용을 물어보세요"):
     st.session_state.message_list.append({"role": "user", "content": user_question})
-    st.session_state.message_list.append({"role": "ai", "content": "", "source": None})
+    st.session_state.message_list.append({"role": "ai", "content": "", "source": None, "row_id": None})
     st.rerun()
 
-# --- 스트리밍 실행 ---
+# --- 답변 생성 및 저장 ---
 if (
     st.session_state.message_list
     and st.session_state.message_list[-1]["role"] == "ai"
@@ -133,118 +216,82 @@ if (
 ):
     user_question = st.session_state.message_list[-2]["content"]
 
-    # ---- page_num 포맷 함수 ----
     def _format_page_token(page_val):
-        """
-        포맷 규칙:
-        - 숫자(int) 또는 '7', '7.0', '07.00' 등 숫자 형태 → '7p'
-        - 문자 섞인 경우 원문 그대로 유지 ('2조 목적' 등)
-        """
-        if page_val is None:
-            return None
-
-        # int → '3p'
-        if isinstance(page_val, int):
-            return f"{page_val}p"
-
+        if page_val is None: return None
+        if isinstance(page_val, int): return f"{page_val}p"
         s = str(page_val).strip()
-        if not s:
-            return None
-
-        # float 형태 문자열 ('7.0', '3.00') → int로 변환 후 p
+        if not s: return None
         try:
             num = float(s)
-            # 정수형(float지만 .0으로 끝나는 경우)
-            if num.is_integer():
-                return f"{int(num)}p"
-        except ValueError:
-            pass
-
-        # 순수 숫자 문자열 ('12') → '12p'
-        if re.fullmatch(r"\d+", s):
-            return f"{s}p"
-
-        # 문자 섞임 ('2조 목적', 'p.12' 등) → 그대로
+            if num.is_integer(): return f"{int(num)}p"
+        except ValueError: pass
+        if re.fullmatch(r"\d+", s): return f"{s}p"
         return s
 
-    # ---- 순서 보존 중복제거 ----
     def _dedup_preserve_order(items):
         seen = set()
         out = []
         for x in items:
-            if x is None:
-                continue
+            if x is None: continue
             if x not in seen:
                 seen.add(x)
                 out.append(x)
         return out
 
-    # ---- 파일명 정제 ----
     def _resolve_pdf_name(metadata: dict):
         name = (metadata or {}).get("origin_pdf") or (metadata or {}).get("source") or "알 수 없음"
-        try:
-            return Path(str(name)).name
-        except Exception:
-            return str(name)
+        try: return Path(str(name)).name
+        except Exception: return str(name)
 
     with st.spinner("답변을 생성하는 중입니다..."):
         ai_response_stream = get_ai_response(user_question)
-
         full_answer = ""
         source_info = None
-
-        # 문서별 페이지 수집 구조
         origins_order = []
         pages_by_origin = {}
         seen_pairs = set()
 
         for chunk in ai_response_stream:
-            # ---- 컨텍스트(문서)에서 출처 정보 수집
             if "context" in chunk and source_info is None:
                 docs = chunk["context"] or []
                 for d in docs:  
                     md = getattr(d, "metadata", {}) or {}
                     origin = _resolve_pdf_name(md)
                     page_token = _format_page_token(md.get("page_num"))
-                    if not page_token:
-                        continue
-
+                    if not page_token: continue
                     pair = (origin, page_token)
-                    if pair in seen_pairs:
-                        continue
+                    if pair in seen_pairs: continue
                     seen_pairs.add(pair)
-
                     if origin not in pages_by_origin:
                         pages_by_origin[origin] = []
                         origins_order.append(origin)
-
                     if page_token not in pages_by_origin[origin]:
                         pages_by_origin[origin].append(page_token)
-
-                # ---- 표기 문자열 구성
                 if origins_order:
                     parts = []
                     for origin in origins_order:
                         pages = _dedup_preserve_order(pages_by_origin.get(origin, []))
-                        if not pages:
-                            continue
-                        # 여러 페이지면 "(파일명) a, b", 하나면 "(파일명) a"
+                        if not pages: continue
                         pages_str = ", ".join(pages)
-                        # ✅ 문서명이 먼저 나오고, 그 뒤에 페이지
                         parts.append(f"({origin}) {pages_str}")
                     if parts:
-                        # ✅ 문서 사이 구분자를 ", " 대신 " / "로 변경
                         source_info = "📄출처: " + " / ".join(parts)
                     else:
                         source_info = "📄출처: 페이지 정보 없음"
                 else:
                     source_info = "📄출처: 페이지 정보 없음"
 
-            # ---- 답변 스트림 이어붙이기
             if "answer" in chunk:
                 full_answer += chunk["answer"]
 
-        # ---- 세션 업데이트
+        # [저장] 시간 저장 부분 개선
+        current_session_id = st.session_state.user_session_id
+        current_branch = st.session_state.user_branch
+        
+        row_id = save_interaction(current_session_id, current_branch, user_question, full_answer)
+        
         st.session_state.message_list[-1]["content"] = full_answer
         st.session_state.message_list[-1]["source"] = source_info
+        st.session_state.message_list[-1]["row_id"] = row_id
+
         st.rerun()

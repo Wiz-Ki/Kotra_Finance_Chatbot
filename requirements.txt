@@ -140,3 +140,7 @@ wcwidth==0.2.14
 wrapt==1.17.3
 yarl==1.20.1
 zstandard==0.24.0
+streamlit-feedback
+gspread
+oauth2client
+pytz
