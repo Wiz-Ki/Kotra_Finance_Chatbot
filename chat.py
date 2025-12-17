@@ -27,7 +27,8 @@ BRANCH_TIMEZONES = {
     "프랑크푸르트무역관": "Europe/Berlin",
     "런던무역관": "Europe/London",
     "본사": "Asia/Seoul",
-    "기타": "Asia/Seoul" # 기본값
+    "기타": "Asia/Seoul",
+    "테스트": "Asia/Seoul" # 기본값
 }
 
 # --------------------------------------------------------------------------
@@ -41,19 +42,31 @@ def get_google_sheet():
         creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
         client = gspread.authorize(creds)
         
-        # [중요] 시트 이름 확인
-        return client.open("정산챗봇로그").sheet1
+        # 1. 원본 시트 연결 (기존 파일)
+        sheet_main = client.open("정산챗봇로그").sheet1
+        
+        # 2. 백업 시트 연결 (수정된 파일명 반영)
+        try:
+            # 여기가 수정되었습니다!
+            sheet_backup = client.open("정산챗봇로그_백업용").sheet1
+        except Exception as e:
+            print(f"백업 시트 연결 실패: {e}")
+            sheet_backup = None
+            
+        return sheet_main, sheet_backup # 두 개의 시트 객체를 반환
     except Exception as e:
         print(f"구글 시트 연결 오류: {e}")
-        return None
+        return None, None
 
 def save_interaction(user_session_id, branch_name, question, answer):
     """
     저장 순서: [ID, 세션ID, 무역관, 질문, 답변, 피드백(공란), 의견(공란), 현지시간, 한국시간]
     """
     try:
-        sheet = get_google_sheet()
-        if sheet:
+        # 두 개의 시트를 받아옴
+        sheet_main, sheet_backup = get_google_sheet()
+        
+        if sheet_main:
             unique_id = str(uuid.uuid4())
             
             # 1. 기준 시간(UTC) 구하기
@@ -64,37 +77,69 @@ def save_interaction(user_session_id, branch_name, question, answer):
             kst_time_str = utc_now.astimezone(kst_tz).strftime("%Y-%m-%d %H:%M:%S")
             
             # 3. 현지 시간(Local) 변환
-            # 선택한 무역관의 시간대를 가져오고, 없으면 '본사(서울)' 시간대로 처리
             target_tz_name = BRANCH_TIMEZONES.get(branch_name, 'Asia/Seoul')
             try:
                 local_tz = pytz.timezone(target_tz_name)
                 local_time_str = utc_now.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
             except:
-                # 혹시 시간대 이름 오타 등으로 에러나면 KST로 저장
                 local_time_str = kst_time_str
 
-            # [수정됨] 현지시간, 한국시간 순서로 저장
             row_data = [unique_id, user_session_id, branch_name, question, answer, "", "", local_time_str, kst_time_str]
             
-            sheet.append_row(row_data)
+            # [수정됨] 원본에 저장
+            sheet_main.append_row(row_data)
+            
+            # [수정됨] 백업본에도 저장 (백업 시트가 연결되어 있을 때만 실행)
+            if sheet_backup:
+                try:
+                    sheet_backup.append_row(row_data)
+                except Exception as e:
+                    print(f"백업 파일 저장 중 오류(무시됨): {e}")
+
             return unique_id
     except Exception as e:
         print(f"저장 실패: {e}")
     return None
 
 def update_feedback(unique_id, feedback_score, feedback_text):
+    """
+    ID를 찾아 피드백과 의견을 업데이트 (양쪽 시트 모두 반영)
+    """
     try:
-        sheet = get_google_sheet()
-        if sheet:
-            # 1. ID가 있는 행 찾기 (A열 = 1번째 열)
-            cell = sheet.find(unique_id, in_column=1)
-            
-            # 업데이트 위치: 6번째(F열):피드백, 7번째(G열):의견
-            # (시간 컬럼이 뒤에 추가된 것이라 피드백 컬럼 위치는 변하지 않았음)
-            sheet.update_cell(cell.row, 6, feedback_score)
-            text_to_save = feedback_text if feedback_text else ""
-            sheet.update_cell(cell.row, 7, text_to_save)
-            return True
+        sheet_main, sheet_backup = get_google_sheet()
+        
+        # 이모지 -> 텍스트 변환 로직
+        if feedback_score == "👍":
+            final_score = "좋아요"
+        elif feedback_score == "👎":
+            final_score = "싫어요"
+        else:
+            final_score = feedback_score
+
+        text_to_save = feedback_text if feedback_text else ""
+
+        # 1. 원본 시트 업데이트 (필수)
+        if sheet_main:
+            try:
+                cell = sheet_main.find(unique_id, in_column=1)
+                if cell:
+                    sheet_main.update_cell(cell.row, 6, final_score)
+                    sheet_main.update_cell(cell.row, 7, text_to_save)
+            except Exception as e:
+                print(f"원본 업데이트 오류: {e}")
+        
+        # 2. 백업 시트 업데이트 (선택 - 실패해도 에러 안 나게 처리)
+        if sheet_backup:
+            try:
+                cell_bk = sheet_backup.find(unique_id, in_column=1)
+                if cell_bk:
+                    sheet_backup.update_cell(cell_bk.row, 6, final_score)
+                    sheet_backup.update_cell(cell_bk.row, 7, text_to_save)
+            except Exception as e:
+                # 백업 파일에서 ID를 못 찾거나 에러가 나도, 챗봇은 멈추면 안 됨
+                print(f"백업 파일 업데이트 실패 (무시함): {e}")
+
+        return True
     except Exception as e:
         print(f"업데이트 실패: {e}")
     return False
@@ -141,7 +186,7 @@ if not check_login():
 # [메인] 앱 UI 시작
 # --------------------------------------------------------------------------
 st.title("💰무역관 정산 챗봇")
-st.caption(f"환영합니다! **{st.session_state.user_branch}** 담당자님 👋 서비스 개선을 위해 답변 하단의 **[좋아요👍/싫어요👎]**를 꼭 눌러주세요!")
+st.caption(f"환영합니다! **{st.session_state.user_branch}** 담당자님 👋 서비스 개선을 위해 답변 하단의 [좋아요👍/싫어요👎] 선택 후 SUBMIT을 꼭 눌러주세요!")
 
 load_dotenv()
 
@@ -188,7 +233,7 @@ for i, message in enumerate(st.session_state.message_list):
                 feedback_key = f"feedback_{i}" 
                 feedback = streamlit_feedback(
                     feedback_type="thumbs",
-                    optional_text_label="[선택] 의견 남기기",
+                    optional_text_label="의견은 선택사항이나, 평가 저장을 위해 SUBMIT을 꼭 눌러주세요",
                     key=feedback_key,
                     align="flex-start"
                 )
