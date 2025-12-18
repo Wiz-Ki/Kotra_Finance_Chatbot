@@ -261,73 +261,21 @@ if "message_list" not in st.session_state:
 st.markdown(
     """
     <style>
-        /* 메인 영역 하단 여백: 푸터가 높아짐에 따라 컨텐츠가 가려지지 않게 조정 */
-        .main .block-container { padding-bottom: 160px !important; }
-
-        /* 채팅 입력창 위치: 푸터 위로 배치 (높이 조절) */
-        [data-testid="stChatInput"] { 
-            bottom: 95px !important; 
-            background-color: transparent !important; 
-        }
+        .main .block-container { padding-bottom: 120px !important; }
+        [data-testid="stChatInput"] { bottom: 50px !important; background-color: transparent !important; }
         [data-testid="stChatInput"] > div { border-color: transparent !important; }
-
-        /* 커스텀 푸터 컨테이너 */
-        .footer-container {
-            position: fixed; 
-            left: 0; 
-            bottom: 0; 
-            width: 100%; 
-            height: 115px; /* 버튼을 포함하기 위해 높이 약간 증가 */
-            background-color: #ffffff; 
-            z-index: 100; 
-            border-top: 1px solid #f0f0f0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start; /* 위쪽(라인)부터 배치 */
-            padding-top: 10px; /* 라인과의 미세한 간격 */
-        }
-
-        /* 주의 문구 스타일 */
-        .disclaimer-text {
-            color: #888888; 
-            font-size: 11px;
-            text-align: center;
-            margin-bottom: 10px; /* 문구와 버튼 사이 간격 */
-            line-height: 1.4;
-        }
-
-        /* 구글 폼 이동 버튼 스타일 */
-        .survey-link {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 6px 16px;
-            background-color: #f8f9fa;
-            color: #444444 !important;
-            text-decoration: none !important;
-            border: 1px solid #d1d1d1;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-
-        .survey-link:hover {
-            background-color: #eeeeee;
-            border-color: #bbbbbb;
-            color: #000000 !important;
+        .footer-disclaimer {
+            position: fixed; left: 0; bottom: 0; width: 100%; height: 95px;
+            background-color: #ffffff; color: #888888; text-align: center;
+            font-size: 12px; display: flex; align-items: center; justify-content: center;
+            z-index: 100; border-top: 1px solid #f0f0f0;
         }
     </style>
-
-    <div class="footer-container">
-        <div class="disclaimer-text">
+    <div class="footer-disclaimer">
+        <div>
             저는 아직 배우는 중이라 실수가 있을 수 있어요! 😅
             답변은 참고만 해주시고, 헷갈리는 부분은 꼭 재무팀 담당자분들께 확인 부탁드려요.
         </div>
-        <a href="https://forms.gle/xtfrwtFFd9XKQ3R6A" target="_blank" class="survey-link">
-            📊 만족도 조사 바로가기
-        </a>
     </div>
     """,
     unsafe_allow_html=True
