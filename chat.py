@@ -262,11 +262,11 @@ st.markdown(
     """
     <style>
         /* 메인 영역 하단 여백: 푸터가 높아짐에 따라 컨텐츠가 가려지지 않게 조정 */
-        .main .block-container { padding-bottom: 160px !important; }
+        .main .block-container { padding-bottom: 120px !important; }
 
         /* 채팅 입력창 위치: 푸터 위로 배치 (높이 조절) */
         [data-testid="stChatInput"] { 
-            bottom: 95px !important; 
+            bottom: 40px !important; 
             background-color: transparent !important; 
         }
         [data-testid="stChatInput"] > div { border-color: transparent !important; }
@@ -277,7 +277,7 @@ st.markdown(
             left: 0; 
             bottom: 0; 
             width: 100%; 
-            height: 115px; /* 버튼을 포함하기 위해 높이 약간 증가 */
+            height: 85px; /* 버튼을 포함하기 위해 높이 약간 증가 */
             background-color: #ffffff; 
             z-index: 100; 
             border-top: 1px solid #f0f0f0;
