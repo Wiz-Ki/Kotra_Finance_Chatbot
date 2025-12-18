@@ -17,18 +17,71 @@ APP_DIR = Path(__file__).resolve().parent
 st.set_page_config(page_title="무역관 정산 챗봇", page_icon="💰")
 
 # --------------------------------------------------------------------------
-# [설정] 무역관별 시간대 매핑 (필요한 만큼 추가하세요)
+# [설정] 무역관별 시간대 매핑 (전체 무역관 리스트 반영)
 # --------------------------------------------------------------------------
-# IANA Timezone Database 이름을 사용합니다.
 BRANCH_TIMEZONES = {
-    "뉴욕무역관": "America/New_York",
-    "도쿄무역관": "Asia/Tokyo",
-    "상하이무역관": "Asia/Shanghai",
-    "프랑크푸르트무역관": "Europe/Berlin",
-    "런던무역관": "Europe/London",
+    # --- 공통 및 본사 ---
     "본사": "Asia/Seoul",
     "기타": "Asia/Seoul",
-    "테스트": "Asia/Seoul" # 기본값
+    "재무팀": "Asia/Seoul",
+    "AI데이터팀": "Asia/Seoul",
+
+    # --- 중국 (Asia/Shanghai) ---
+    "베이징무역관": "Asia/Shanghai", "상하이무역관": "Asia/Shanghai", "광저우무역관": "Asia/Shanghai",
+    "다롄무역관": "Asia/Shanghai", "청두무역관": "Asia/Shanghai", "칭다오무역관": "Asia/Shanghai",
+    "우한무역관": "Asia/Shanghai", "샤먼무역관": "Asia/Shanghai", "난징무역관": "Asia/Shanghai",
+    "선전무역관": "Asia/Shanghai", "항저우무역관": "Asia/Shanghai", "정저우무역관": "Asia/Shanghai",
+    "창사무역관": "Asia/Shanghai", "시안무역관": "Asia/Shanghai", "텐진무역관": "Asia/Shanghai",
+    "홍콩무역관": "Asia/Hong_Kong", "타이베이무역관": "Asia/Taipei",
+
+    # --- 유럽 (Europe/...) ---
+    "프랑크푸르트무역관": "Europe/Berlin", "함부르크무역관": "Europe/Berlin", "뮌헨무역관": "Europe/Berlin",
+    "런던무역관": "Europe/London", "파리무역관": "Europe/Paris", "밀라노무역관": "Europe/Rome",
+    "마드리드무역관": "Europe/Madrid", "브뤼셀무역관": "Europe/Brussels", "암스테르담무역관": "Europe/Amsterdam",
+    "취리히무역관": "Europe/Zurich", "스톡홀름무역관": "Europe/Stockholm", "코펜하겐무역관": "Europe/Copenhagen",
+    "오슬로무역관": "Europe/Oslo", "헬싱키무역관": "Europe/Helsinki", "빈무역관": "Europe/Vienna",
+    "바르샤바무역관": "Europe/Warsaw", "부다페스트무역관": "Europe/Budapest", "프라하무역관": "Europe/Prague",
+    "부쿠레슈티무역관": "Europe/Bucharest", "소피아무역관": "Europe/Sofia", "베오그라드무역관": "Europe/Belgrade",
+    "자그레브무역관": "Europe/Zagreb", "브라티슬라바무역관": "Europe/Bratislava", "아테네무역관": "Europe/Athens",
+    "리스본무역관": "Europe/Lisbon",
+
+    # --- 북미 (America/...) ---
+    "뉴욕무역관": "America/New_York", "워싱턴무역관": "America/New_York", "마이애미무역관": "America/New_York",
+    "디트로이트무역관": "America/Detroit", "시카고무역관": "America/Chicago", "달라스무역관": "America/Chicago",
+    "로스앤젤레스무역관": "America/Los_Angeles", "실리콘밸리무역관": "America/Los_Angeles",
+    "토론토무역관": "America/Toronto", "밴쿠버무역관": "America/Vancouver",
+
+    # --- 일본 (Asia/Tokyo) ---
+    "도쿄무역관": "Asia/Tokyo", "오사카무역관": "Asia/Tokyo", "나고야무역관": "Asia/Tokyo", "후쿠오카무역관": "Asia/Tokyo",
+
+    # --- 동남아시아/대양주 ---
+    "방콕무역관": "Asia/Bangkok", "싱가포르무역관": "Asia/Singapore", "하노이무역관": "Asia/Ho_Chi_Minh",
+    "호치민무역관": "Asia/Ho_Chi_Minh", "다낭무역관": "Asia/Ho_Chi_Minh", "자카르타무역관": "Asia/Jakarta",
+    "수라바야무역관": "Asia/Jakarta", "쿠알라룸푸르무역관": "Asia/Kuala_Lumpur", "마닐라무역관": "Asia/Manila",
+    "프놈펜무역관": "Asia/Phnom_Penh", "양곤무역관": "Asia/Yangon", "비엔티안무역관": "Asia/Vientiane",
+    "시드니무역관": "Australia/Sydney", "멜버른무역관": "Australia/Melbourne", "오클랜드무역관": "Pacific/Auckland",
+
+    # --- 서남아시아/중동/아프리카 ---
+    "뉴델리무역관": "Asia/Kolkata", "뭄바이무역관": "Asia/Kolkata", "첸나이무역관": "Asia/Kolkata",
+    "벵갈루루무역관": "Asia/Kolkata", "콜롬보무역관": "Asia/Colombo", "다카무역관": "Asia/Dhaka",
+    "카라치무역관": "Asia/Karachi", "두바이무역관": "Asia/Dubai", "무스카트무역관": "Asia/Muscat",
+    "리야드무역관": "Asia/Riyadh", "제다무역관": "Asia/Riyadh", "쿠웨이트무역관": "Asia/Kuwait",
+    "도하무역관": "Asia/Doha", "암만무역관": "Asia/Amman", "베이루트무역관": "Asia/Beirut",
+    "텔아비브무역관": "Asia/Tel_Aviv", "이스탄불무역관": "Europe/Istanbul", "카이로무역관": "Africa/Cairo",
+    "카사블랑카무역관": "Africa/Casablanca", "알제무역관": "Africa/Algiers", "트리폴리무역관": "Africa/Tripoli",
+    "나이로비무역관": "Africa/Nairobi", "아디스아바바무역관": "Africa/Addis_Ababa", "요하네스버그무역관": "Africa/Johannesburg",
+    "라고스무역관": "Africa/Lagos", "아크라무역관": "Africa/Accra", "다르에스살람무역관": "Africa/Dar_es_Salaam",
+
+    # --- 중남미 ---
+    "멕시코시티무역관": "America/Mexico_City", "파나마무역관": "America/Panama", "과테말라무역관": "America/Guatemala",
+    "산토도밍고무역관": "America/Santo_Domingo", "보고타무역관": "America/Bogota", "리마무역관": "America/Lima",
+    "상파울루무역관": "America/Sao_Paulo", "부에노스아이레스무역관": "America/Argentina/Buenos_Aires",
+    "산티아고무역관": "America/Santiago", "키토무역관": "America/Quito", "아순시온무역관": "America/Asuncion",
+
+    # --- CIS (독립국가연합) ---
+    "모스크바무역관": "Europe/Moscow", "블라디보스토크무역관": "Asia/Vladivostok", "노보시비르스크무역관": "Asia/Novosibirsk",
+    "상트페테르부르크무역관": "Europe/Moscow", "알마티무역관": "Asia/Almaty", "타슈켄트무역관": "Asia/Tashkent",
+    "키이우무역관": "Europe/Kyiv", "울란바토르무역관": "Asia/Ulaanbaatar"
 }
 
 # --------------------------------------------------------------------------
@@ -159,10 +212,18 @@ def check_login():
     st.header("🔒 무역관 정산 챗봇 로그인")
     st.write("소속 무역관을 선택하고 비밀번호를 입력해주세요.")
     
-    # [설정] 무역관 목록 (여기에 있는 이름이 위 BRANCH_TIMEZONES 키와 같아야 시간이 정확함)
-    branch_options = ["선택해주세요"] + list(BRANCH_TIMEZONES.keys()) # 사전 키를 그대로 목록으로 사용
+    # --- [수정된 정렬 로직] ---
+    # 1. 하단에 고정할 항목들 리스트
+    fixed_items = ["본사", "기타", "재무팀", "AI데이터팀"]
     
-    selected_branch = st.selectbox("소속 무역관", branch_options)
+    # 2. 전체 키 중에서 고정 항목을 제외한 '무역관'들만 추출하여 가나다 순으로 정렬
+    trade_centers = sorted([k for k in BRANCH_TIMEZONES.keys() if k not in fixed_items])
+    
+    # 3. 최종 리스트: 선택해주세요 + 정렬된 무역관 + 고정 항목 순서로 합치기
+    branch_options = ["선택해주세요"] + trade_centers + fixed_items
+    # --------------------------
+    
+    selected_branch = st.selectbox("소속 무역관/본사", branch_options)
     password_input = st.text_input("비밀번호", type="password")
     
     if st.button("접속하기") or password_input:
@@ -186,7 +247,7 @@ if not check_login():
 # [메인] 앱 UI 시작
 # --------------------------------------------------------------------------
 st.title("💰무역관 정산 챗봇")
-st.caption(f"환영합니다! **{st.session_state.user_branch}** 담당자님 👋 서비스 개선을 위해 답변 하단의 [좋아요👍/싫어요👎] 선택 후 SUBMIT을 꼭 눌러주세요!")
+st.caption(f"환영합니다! **{st.session_state.user_branch}** 담당자님 👋 서비스 개선을 위해 답변 하단의 **[좋아요👍/싫어요👎]** 선택 후 SUBMIT을 꼭 눌러주세요!")
 
 load_dotenv()
 
@@ -212,7 +273,7 @@ st.markdown(
     </style>
     <div class="footer-disclaimer">
         <div>
-            저는 아직 배우는 중이라 실수가 있을 수 있어요! 😅 <br>
+            저는 아직 배우는 중이라 실수가 있을 수 있어요! 😅
             답변은 참고만 해주시고, 헷갈리는 부분은 꼭 재무팀 담당자분들께 확인 부탁드려요.
         </div>
     </div>
