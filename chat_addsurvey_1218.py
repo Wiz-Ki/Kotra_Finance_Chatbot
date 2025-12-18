@@ -263,7 +263,7 @@ st.markdown(
     <style>
         /* 메인 영역 하단 여백: 푸터가 높아짐에 따라 컨텐츠가 가려지지 않게 조정 */
         .main .block-container { padding-bottom: 120px !important; }
-
+        
         /* 채팅 입력창 위치: 푸터 위로 배치 (높이 조절) */
         [data-testid="stChatInput"] { 
             bottom: 40px !important; 
@@ -402,6 +402,11 @@ if (
         except Exception: return str(name)
 
     with st.spinner("답변을 생성하는 중입니다..."):
+        # [추가] 답변 생성 중에 스피너 아래에 투명 공간을 만들어 스피너를 위로 밀어 올림
+        loading_spacer = st.empty()
+        with loading_spacer:
+            st.markdown('<div style="height: 100px;"></div>', unsafe_allow_html=True)
+            
         ai_response_stream = get_ai_response(user_question)
         full_answer = ""
         source_info = None
