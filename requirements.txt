@@ -75,9 +75,7 @@ pandas==2.3.2
 parso==0.8.5
 pexpect==4.9.0
 pillow==11.3.0
-pinecone==7.3.0
-pinecone-plugin-assistant==1.7.0
-pinecone-plugin-interface==0.0.7
+pinecone
 platformdirs==4.4.0
 pluggy==1.6.0
 prompt_toolkit==3.0.52
