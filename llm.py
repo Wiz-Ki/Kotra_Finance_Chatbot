@@ -8,8 +8,8 @@ from langchain_pinecone import PineconeVectorStore
 #from langchain.chains import RetrievalQA 
 #from langchain import hub 
 
-from langchain_core.retrievers import BaseRetriever   # ← 이 줄 추가
-from langchain.schema import Document                 # ← 이 줄 추가
+from langchain_core.retrievers import BaseRetriever   
+from langchain.schema import Document   
 from typing import Any, List
 
 from langchain_community.chat_message_histories import ChatMessageHistory

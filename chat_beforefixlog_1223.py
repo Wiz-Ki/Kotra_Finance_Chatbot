@@ -111,9 +111,9 @@ def get_google_sheet():
         print(f"구글 시트 연결 오류: {e}")
         return None, None
 
-def save_interaction(user_session_id, branch_name, question, answer, source_info=None): # [수정] source_info 인자 추가
+def save_interaction(user_session_id, branch_name, question, answer):
     """
-    저장 순서: [ID, 세션ID, 무역관, 질문, 답변(출처포함), 피드백(공란), 의견(공란), 현지시간, 한국시간]
+    저장 순서: [ID, 세션ID, 무역관, 질문, 답변, 피드백(공란), 의견(공란), 현지시간, 한국시간]
     """
     try:
         # 두 개의 시트를 받아옴
@@ -137,19 +137,12 @@ def save_interaction(user_session_id, branch_name, question, answer, source_info
             except:
                 local_time_str = kst_time_str
 
-            # [수정] 답변과 출처 합치기
-            final_answer = answer
-            if source_info:
-                # 가독성을 위해 줄바꿈 두 번(\n\n) 후 출처 표기
-                final_answer = f"{answer}\n\n{source_info}"
-
-            # [수정] row_data에 answer 대신 final_answer 저장
-            row_data = [unique_id, user_session_id, branch_name, question, final_answer, "", "", local_time_str, kst_time_str]
+            row_data = [unique_id, user_session_id, branch_name, question, answer, "", "", local_time_str, kst_time_str]
             
-            # 원본에 저장
+            # [수정됨] 원본에 저장
             sheet_main.append_row(row_data)
             
-            # 백업본에도 저장 (백업 시트가 연결되어 있을 때만 실행)
+            # [수정됨] 백업본에도 저장 (백업 시트가 연결되어 있을 때만 실행)
             if sheet_backup:
                 try:
                     sheet_backup.append_row(row_data)
@@ -458,8 +451,7 @@ if (
         current_session_id = st.session_state.user_session_id
         current_branch = st.session_state.user_branch
         
-        # [수정] 함수 호출 시 source_info 인자 추가 전달
-        row_id = save_interaction(current_session_id, current_branch, user_question, full_answer, source_info)
+        row_id = save_interaction(current_session_id, current_branch, user_question, full_answer)
         
         st.session_state.message_list[-1]["content"] = full_answer
         st.session_state.message_list[-1]["source"] = source_info
