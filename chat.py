@@ -14,7 +14,7 @@ import pytz # [필수] 시간대 처리를 위해 추가
 
 # --- 기본 설정 ---
 APP_DIR = Path(__file__).resolve().parent
-st.set_page_config(page_title="무역관 정산 챗봇", page_icon="💰")
+st.set_page_config(page_title="해외무역관 AI 정산도우미", page_icon="💰")
 
 # --------------------------------------------------------------------------
 # [설정] 무역관별 시간대 매핑 (전체 무역관 리스트 반영)
@@ -216,7 +216,7 @@ def check_login():
     if st.session_state["login_success"]:
         return True
 
-    st.header("🔒 무역관 정산 챗봇 로그인")
+    st.header("🔒 AI 정산도우미 로그인")
     st.write("소속 무역관을 선택하고 비밀번호를 입력해주세요.")
     
     # --- [수정된 정렬 로직] ---
