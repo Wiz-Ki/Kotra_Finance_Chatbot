@@ -332,7 +332,7 @@ st.markdown(
             저는 아직 배우는 중이라 실수가 있을 수 있어요! 😅
             답변은 참고만 해주시고, 헷갈리는 부분은 꼭 재무팀 담당자분들께 확인 부탁드려요.
         </div>
-        <a href="https://forms.gle/xtfrwtFFd9XKQ3R6A" target="_blank" class="survey-link">
+        <a href="https://moaform.com/q/HsV3Zj" target="_blank" class="survey-link">
             📊 만족도 조사 바로가기
         </a>
     </div>
