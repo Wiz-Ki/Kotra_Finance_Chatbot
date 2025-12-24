@@ -19,11 +19,11 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from config import answer_examples
  
 
-PRIORITY_ORIGIN = "해외조직망정산지침"
+PRIORITY_ORIGIN = "정산지침"
 
 class PriorityRetriever(BaseRetriever):
     """
-    origin_pdf가 '해외조직망정산지침'인 문서를 항상 앞으로 보내고,
+    origin_pdf가 '정산지침'인 문서를 항상 앞으로 보내고,
     나머지 문서는 뒤로 보내는 래퍼 retriever.
     같은 그룹 안에서는 원래 similarity 순서를 유지한다.
     """
