@@ -1,5 +1,5 @@
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, FewShotChatMessagePromptTemplate, PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, FewShotChatMessagePromptTemplate
 from langchain.chains import create_retrieval_chain, create_history_aware_retriever
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_openai import ChatOpenAI 
@@ -19,64 +19,67 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from config import answer_examples
  
 
-# 세션 기록 저장소
+PRIORITY_ORIGIN = "정산지침"
+
+class PriorityRetriever(BaseRetriever):
+    """
+    origin_pdf가 '정산지침'인 문서를 항상 앞으로 보내고,
+    나머지 문서는 뒤로 보내는 래퍼 retriever.
+    같은 그룹 안에서는 원래 similarity 순서를 유지한다.
+    """
+    base_retriever: Any
+
+    def _get_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager=None,
+    ) -> List[Document]:
+        docs = self.base_retriever.invoke(query)
+        docs.sort(
+            key=lambda d: 0 if d.metadata.get("origin_pdf") == PRIORITY_ORIGIN else 1
+        )
+        return docs
+
+    async def _aget_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager=None,
+    ) -> List[Document]:
+        docs = await self.base_retriever.ainvoke(query)
+        docs.sort(
+            key=lambda d: 0 if d.metadata.get("origin_pdf") == PRIORITY_ORIGIN else 1
+        )
+        return docs
+    
 store = {}
-
-# --- [핵심 변경 1] 3+2 검색 전략을 수행하는 Custom Retriever ---
-class SplitRetriever(BaseRetriever):
-    """
-    정산지침에서 Top 3, 교육자료에서 Top 2를 각각 검색하여
-    총 5개의 문서를 합쳐서 반환하는 Retriever
-    """
-    vectorstore: Any
-
-    def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
-        # 1. 정산지침 검색 (Top 3)
-        docs_guideline = self.vectorstore.similarity_search(
-            query, 
-            k=3, 
-            filter={"origin_pdf": "정산지침"}
-        )
-        
-        # 2. 교육자료 검색 (Top 2)
-        docs_manual = self.vectorstore.similarity_search(
-            query, 
-            k=2, 
-            filter={"origin_pdf": "교육자료"}
-        )
-        
-        # 3. 결과 합치기 (총 5개) -> 지침을 먼저 배치하여 우선순위 강조
-        return docs_guideline + docs_manual
-
-    async def _aget_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
-        # 비동기 처리가 필요할 경우를 대비한 구현 (동일 로직)
-        docs_guideline = await self.vectorstore.asimilarity_search(
-            query, k=3, filter={"origin_pdf": "정산지침"}
-        )
-        docs_manual = await self.vectorstore.asimilarity_search(
-            query, k=2, filter={"origin_pdf": "교육자료"}
-        )
-        return docs_guideline + docs_manual
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     if session_id not in store:
         store[session_id] = ChatMessageHistory()
     return store[session_id]
 
+
 def get_retriever():
     embedding = OpenAIEmbeddings(model='text-embedding-3-large')
     index_name = 'finance-new-index'
-    
-    # Pinecone 연결
     database = PineconeVectorStore.from_existing_index(
         index_name=index_name,
         embedding=embedding,
     )
 
-    # Custom Retriever 생성 (VectorStore 자체를 넘겨줌)
-    split_retriever = SplitRetriever(vectorstore=database)
+    # 1) 기존 similarity 기반 retriever 생성
+    base_retriever = database.as_retriever(
+        search_type="similarity",   # 점수순
+        search_kwargs={"k": 3},     # k 고정
+    )
 
-    return split_retriever
+    # 2) 정산지침(해외조직망정산지침) 우선 retriever로 감싸기
+    priority_retriever = PriorityRetriever(base_retriever=base_retriever)
+
+    return priority_retriever
+
 
 def get_history_retriever():
     llm = get_llm()
@@ -125,9 +128,8 @@ def get_rag_chain(): # 챗봇의 엔진
     )
     system_prompt = (
         "당신은 회사 재무팀에서 근무하는 해외무역관 정산 전문가입니다."
-        "아래에 제공된 문서를 참고해서만 질문에 답변해주시고"
-        "만약 '정산지침'과 '교육자료'의 내용이 상충할 경우, '정산지침'을 우선하여 답변하세요."
-        "정말로 전혀 관련 규정이나 설명을 찾을 수 없을 때만 자료에 없음이라고 답변해주세요."
+        "아래에 제공된 문서를 참고해서 질문에 답변해주시고"
+        "정말로 전혀 관련 규정이나 설명을 찾을 수 없을 때만 자료에 없음이라고 답변해주세요"
         "\n\n"
         "{context}"
     )
@@ -142,18 +144,7 @@ def get_rag_chain(): # 챗봇의 엔진
     )
     history_aware_retriever = get_history_retriever() # 대화 맥락을 이해하는 '스마트 검색기'
 
-    # --- [핵심 변경 2] 문서 포맷팅: AI가 출처를 볼 수 있게 만듦 ---
-    # {page_content} 뿐만 아니라 metadata인 origin_pdf, page_num을 같이 텍스트로 만들어 줌
-    document_prompt = PromptTemplate.from_template(
-        "출처: {origin_pdf} (페이지: {page_num})\n내용: {page_content}"
-    )
-
-    # create_stuff_documents_chain에 document_prompt 적용
-    question_answer_chain = create_stuff_documents_chain(
-        llm, 
-        qa_prompt,
-        document_prompt=document_prompt 
-    )
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
 
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
     
@@ -163,7 +154,7 @@ def get_rag_chain(): # 챗봇의 엔진
         input_messages_key="input",
         history_messages_key="chat_history",
         output_messages_key="answer",
-    )
+    )#.pick('answer')
     
     return conversational_rag_chain
     
