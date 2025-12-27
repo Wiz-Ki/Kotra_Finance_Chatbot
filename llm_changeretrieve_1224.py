@@ -72,7 +72,7 @@ def get_retriever():
     # 1) 기존 similarity 기반 retriever 생성
     base_retriever = database.as_retriever(
         search_type="similarity",   # 점수순
-        search_kwargs={"k": 3},     # k 고정
+        search_kwargs={"k": 4},     # k 고정
     )
 
     # 2) 정산지침(해외조직망정산지침) 우선 retriever로 감싸기

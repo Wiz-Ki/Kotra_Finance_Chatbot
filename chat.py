@@ -32,21 +32,22 @@ BRANCH_TIMEZONES = {
     "우한무역관": "Asia/Shanghai", "샤먼무역관": "Asia/Shanghai", "난징무역관": "Asia/Shanghai",
     "선전무역관": "Asia/Shanghai", "항저우무역관": "Asia/Shanghai", "정저우무역관": "Asia/Shanghai",
     "창사무역관": "Asia/Shanghai", "시안무역관": "Asia/Shanghai", "텐진무역관": "Asia/Shanghai",
-    "홍콩무역관": "Asia/Hong_Kong", "타이베이무역관": "Asia/Taipei",
+    "홍콩무역관": "Asia/Hong_Kong", "타이베이무역관": "Asia/Taipei", "선양무역관": "Asia/Shanghai",
+    "충칭무역관": "Asia/Shanghai", "창춘무역관": "Asia/Shanghai", "하얼빈무역관": "Asia/Shanghai",
 
     # --- 유럽 (Europe/...) ---
     "프랑크푸르트무역관": "Europe/Berlin", "함부르크무역관": "Europe/Berlin", "뮌헨무역관": "Europe/Berlin",
     "런던무역관": "Europe/London", "파리무역관": "Europe/Paris", "밀라노무역관": "Europe/Rome",
     "마드리드무역관": "Europe/Madrid", "브뤼셀무역관": "Europe/Brussels", "암스테르담무역관": "Europe/Amsterdam",
     "취리히무역관": "Europe/Zurich", "스톡홀름무역관": "Europe/Stockholm", "코펜하겐무역관": "Europe/Copenhagen",
-    "오슬로무역관": "Europe/Oslo", "헬싱키무역관": "Europe/Helsinki", "빈무역관": "Europe/Vienna",
+    "헬싱키무역관": "Europe/Helsinki", "빈무역관": "Europe/Vienna",
     "바르샤바무역관": "Europe/Warsaw", "부다페스트무역관": "Europe/Budapest", "프라하무역관": "Europe/Prague",
     "부쿠레슈티무역관": "Europe/Bucharest", "소피아무역관": "Europe/Sofia", "베오그라드무역관": "Europe/Belgrade",
     "자그레브무역관": "Europe/Zagreb", "브라티슬라바무역관": "Europe/Bratislava", "아테네무역관": "Europe/Athens",
     "리스본무역관": "Europe/Lisbon",
 
     # --- 북미 (America/...) ---
-    "뉴욕무역관": "America/New_York", "워싱턴무역관": "America/New_York", "마이애미무역관": "America/New_York",
+    "뉴욕무역관": "America/New_York", "워싱턴무역관": "America/New_York", "애틀랜타무역관": "America/New_York",
     "디트로이트무역관": "America/Detroit", "시카고무역관": "America/Chicago", "달라스무역관": "America/Chicago",
     "로스앤젤레스무역관": "America/Los_Angeles", "실리콘밸리무역관": "America/Los_Angeles",
     "토론토무역관": "America/Toronto", "밴쿠버무역관": "America/Vancouver",
@@ -71,17 +72,19 @@ BRANCH_TIMEZONES = {
     "카사블랑카무역관": "Africa/Casablanca", "알제무역관": "Africa/Algiers", "트리폴리무역관": "Africa/Tripoli",
     "나이로비무역관": "Africa/Nairobi", "아디스아바바무역관": "Africa/Addis_Ababa", "요하네스버그무역관": "Africa/Johannesburg",
     "라고스무역관": "Africa/Lagos", "아크라무역관": "Africa/Accra", "다르에스살람무역관": "Africa/Dar_es_Salaam",
+    "암다바드무역관": "Asia/Kolkata", "콜카타무역관": "Asia/Kolkata", "테헤란무역관": "Asia/Tehran", "바그다드무역관": "Asia/Baghdad",
+    "아비장무역관": "Africa/Abidjan", "마푸투무역관": "Africa/Maputo",
 
     # --- 중남미 ---
     "멕시코시티무역관": "America/Mexico_City", "파나마무역관": "America/Panama", "과테말라무역관": "America/Guatemala",
     "산토도밍고무역관": "America/Santo_Domingo", "보고타무역관": "America/Bogota", "리마무역관": "America/Lima",
-    "상파울루무역관": "America/Sao_Paulo", "부에노스아이레스무역관": "America/Argentina/Buenos_Aires",
+    "상파울루무역관": "America/Sao_Paulo", "부에노스아이레스무역관": "America/Argentina/Buenos_Aires", "아바나무역관": "America/Havana",
     "산티아고무역관": "America/Santiago", "키토무역관": "America/Quito", "아순시온무역관": "America/Asuncion",
 
     # --- CIS (독립국가연합) ---
     "모스크바무역관": "Europe/Moscow", "블라디보스토크무역관": "Asia/Vladivostok", "노보시비르스크무역관": "Asia/Novosibirsk",
-    "상트페테르부르크무역관": "Europe/Moscow", "알마티무역관": "Asia/Almaty", "타슈켄트무역관": "Asia/Tashkent",
-    "키이우무역관": "Europe/Kyiv", "울란바토르무역관": "Asia/Ulaanbaatar"
+    "상트페테르부르크무역관": "Europe/Moscow", "알마티무역관": "Asia/Almaty", "타슈켄트무역관": "Asia/Tashkent", "트빌리시무역관": "Asia/Tbilisi",
+    "키이우무역관": "Europe/Kyiv", "울란바토르무역관": "Asia/Ulaanbaatar", "바쿠무역관": "Asia/Baku", "민스크무역관": "Europe/Minsk"
 }
 
 # --------------------------------------------------------------------------
