@@ -42,8 +42,9 @@ class MultiNamespaceRetriever(BaseRetriever):
     vectorstore: Any
     embedding: Any
     namespaces: List[str]
-    per_namespace_k: int = 4
-    final_k: int = 6
+    per_namespace_k: int = 3
+    final_k: int = 3
+    score_threshold: float = 0.35
 
     def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
         query_vector = self.embedding.embed_query(query)
@@ -56,6 +57,8 @@ class MultiNamespaceRetriever(BaseRetriever):
                 namespace=namespace,
             )
             for document, score in namespace_results:
+                if score < self.score_threshold:
+                    continue
                 document.metadata.setdefault("namespace", namespace)
                 scored_documents.append((document, score))
 
