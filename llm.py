@@ -10,7 +10,7 @@ from langchain_pinecone import PineconeVectorStore
 
 from langchain_core.retrievers import BaseRetriever   
 from langchain.schema import Document   
-from typing import Any, List
+from typing import Any, List, Tuple
 
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
@@ -22,41 +22,59 @@ from config import answer_examples
 # 세션 기록 저장소
 store = {}
 
-# --- [핵심 변경 1] 3+2 검색 전략을 수행하는 Custom Retriever ---
-class SplitRetriever(BaseRetriever):
+# Pinecone index 내의 문서군별 namespace
+PINECONE_NAMESPACES = [
+    "cal_guide",
+    "edu_material",
+    "public_official_conflict_interest_act",
+    "improper_solicitation_graft_act",
+    "workplace_human_rights_guideline",
+    "kotra_conflict_interest_guideline",
+    "kotra_code_of_conduct",
+]
+
+
+class MultiNamespaceRetriever(BaseRetriever):
     """
-    정산지침에서 Top 3, 교육자료에서 Top 2를 각각 검색하여
-    총 5개의 문서를 합쳐서 반환하는 Retriever
+    질문을 한 번만 임베딩한 뒤 모든 namespace를 검색하고,
+    유사도 점수가 높은 문서를 합쳐서 반환하는 Retriever.
     """
     vectorstore: Any
+    embedding: Any
+    namespaces: List[str]
+    per_namespace_k: int = 4
+    final_k: int = 6
 
     def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
-        # 1. 정산지침 검색 (Top 3)
-        docs_guideline = self.vectorstore.similarity_search(
-            query, 
-            k=3, 
-            filter={"origin_pdf": "정산지침"}
-        )
-        
-        # 2. 교육자료 검색 (Top 2)
-        docs_manual = self.vectorstore.similarity_search(
-            query, 
-            k=2, 
-            filter={"origin_pdf": "교육자료"}
-        )
-        
-        # 3. 결과 합치기 (총 5개) -> 지침을 먼저 배치하여 우선순위 강조
-        return docs_guideline + docs_manual
+        query_vector = self.embedding.embed_query(query)
+        scored_documents: List[Tuple[Document, float]] = []
 
-    async def _aget_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
-        # 비동기 처리가 필요할 경우를 대비한 구현 (동일 로직)
-        docs_guideline = await self.vectorstore.asimilarity_search(
-            query, k=3, filter={"origin_pdf": "정산지침"}
-        )
-        docs_manual = await self.vectorstore.asimilarity_search(
-            query, k=2, filter={"origin_pdf": "교육자료"}
-        )
-        return docs_guideline + docs_manual
+        for namespace in self.namespaces:
+            namespace_results = self.vectorstore.similarity_search_by_vector_with_score(
+                query_vector,
+                k=self.per_namespace_k,
+                namespace=namespace,
+            )
+            for document, score in namespace_results:
+                document.metadata.setdefault("namespace", namespace)
+                scored_documents.append((document, score))
+
+        # 모든 namespace가 같은 index/metric을 사용하므로 유사도를 통합 정렬한다.
+        scored_documents.sort(key=lambda item: item[1], reverse=True)
+
+        documents = []
+        seen_ids = set()
+        for document, _ in scored_documents:
+            document_id = document.id or document.metadata.get("chunk_id")
+            deduplication_key = document_id or document.page_content
+            if deduplication_key in seen_ids:
+                continue
+            seen_ids.add(deduplication_key)
+            documents.append(document)
+            if len(documents) == self.final_k:
+                break
+
+        return documents
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     if session_id not in store:
@@ -65,7 +83,7 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
 
 def get_retriever():
     embedding = OpenAIEmbeddings(model='text-embedding-3-large')
-    index_name = 'finance-new-index'
+    index_name = 'finance-index-v2'
     
     # Pinecone 연결
     database = PineconeVectorStore.from_existing_index(
@@ -73,10 +91,13 @@ def get_retriever():
         embedding=embedding,
     )
 
-    # Custom Retriever 생성 (VectorStore 자체를 넘겨줌)
-    split_retriever = SplitRetriever(vectorstore=database)
+    namespace_retriever = MultiNamespaceRetriever(
+        vectorstore=database,
+        embedding=embedding,
+        namespaces=PINECONE_NAMESPACES,
+    )
 
-    return split_retriever
+    return namespace_retriever
 
 def get_history_retriever():
     llm = get_llm()
