@@ -441,14 +441,14 @@ if (
                     if page_token not in pages_by_origin[origin]:
                         pages_by_origin[origin].append(page_token)
                 if origins_order:
-                    parts = []
+                    source_lines = []
                     for origin in origins_order:
                         pages = _dedup_preserve_order(pages_by_origin.get(origin, []))
                         if not pages: continue
-                        pages_str = ", ".join(pages)
-                        parts.append(f"({origin}) {pages_str}")
-                    if parts:
-                        source_info = "📄출처: " + " / ".join(parts)
+                        for page in pages:
+                            source_lines.append(f"- ({origin}) {page}")
+                    if source_lines:
+                        source_info = "📄출처:\n\n" + "\n".join(source_lines)
                     else:
                         source_info = "📄출처: 페이지 정보 없음"
                 else:
