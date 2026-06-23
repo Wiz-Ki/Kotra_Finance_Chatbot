@@ -307,23 +307,33 @@ st.markdown(
             line-height: 1.4;
         }
 
-        /* 구글 폼 이동 버튼 스타일 */
-        .survey-link {
+        /* 푸터 바로가기 버튼 그룹 */
+        .footer-links {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: calc(100% - 16px);
+        }
+
+        /* 푸터 바로가기 버튼 스타일 */
+        .footer-link {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 6px 16px;
+            padding: 6px clamp(8px, 2vw, 16px);
             background-color: #f8f9fa;
             color: #444444 !important;
             text-decoration: none !important;
             border: 1px solid #d1d1d1;
             border-radius: 6px;
-            font-size: 13px;
+            font-size: clamp(11px, 2.8vw, 13px);
             font-weight: 500;
+            white-space: nowrap;
             transition: all 0.2s ease;
         }
 
-        .survey-link:hover {
+        .footer-link:hover {
             background-color: #eeeeee;
             border-color: #bbbbbb;
             color: #000000 !important;
@@ -335,9 +345,14 @@ st.markdown(
             저는 아직 배우는 중이라 실수가 있을 수 있어요! 😅
             답변은 참고만 해주시고, 헷갈리는 부분은 꼭 재무팀 담당자분들께 확인 부탁드려요.
         </div>
-        <a href="https://moaform.com/q/HsV3Zj" target="_blank" class="survey-link">
-            📊 만족도 조사 바로가기
-        </a>
+        <div class="footer-links">
+            <a href="https://kbei.org/whistle" target="_blank" rel="noopener noreferrer" class="footer-link">
+                🚨 케이휘슬 익명신고 바로가기
+            </a>
+            <a href="https://moaform.com/q/HsV3Zj" target="_blank" rel="noopener noreferrer" class="footer-link">
+                📊 만족도 조사 바로가기
+            </a>
+        </div>
     </div>
     """,
     unsafe_allow_html=True
