@@ -1,9 +1,7 @@
 import re
+import os
 from pathlib import Path
 import streamlit as st
-from dotenv import load_dotenv
-
-load_dotenv()
 
 from config import (
     get_google_sheet_backup_name,
@@ -23,6 +21,19 @@ import pytz # [필수] 시간대 처리를 위해 추가
 # --- 기본 설정 ---
 APP_DIR = Path(__file__).resolve().parent
 st.set_page_config(page_title="해외무역관 AI 정산도우미", page_icon="💰")
+
+
+def load_runtime_config():
+    for key in ("OPENAI_API_KEY", "PINECONE_API_KEY"):
+        try:
+            secret_value = st.secrets.get(key)
+        except Exception:
+            secret_value = None
+        if secret_value:
+            os.environ[key] = str(secret_value)
+
+
+load_runtime_config()
 
 # --------------------------------------------------------------------------
 # [설정] 무역관별 시간대 매핑 (전체 무역관 리스트 반영)
