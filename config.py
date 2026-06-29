@@ -1,34 +1,14 @@
-import os
+PINECONE_INDEX_NAME = "kotra-finance-chatbot"
+PINECONE_NAMESPACES = ["finance", "esg"]
 
-from dotenv import load_dotenv
+GOOGLE_SHEET_MAIN_NAME = "정산챗봇로그_dev"
+GOOGLE_SHEET_BACKUP_NAME = "정산챗봇로그_백업용_dev"
 
-
-load_dotenv()
-
-
-def get_config_value(name: str, default: str) -> str:
-    env_value = os.getenv(name)
-    if env_value:
-        return env_value
-
-    try:
-        import streamlit as st
-
-        secret_value = st.secrets.get(name)
-        if secret_value:
-            return str(secret_value)
-    except Exception:
-        pass
-
-    return default
-
-
-PINECONE_DEFAULT_INDEX_NAME = "kotra-finance-chatbot"
-
-GOOGLE_SHEET_MAIN_DEFAULT_NAME = "정산챗봇로그"
-GOOGLE_SHEET_BACKUP_DEFAULT_NAME = "정산챗봇로그_백업용"
-
-PINECONE_DEFAULT_NAMESPACES = ["finance", "esg"]
+RAG_ROUTE_K = 8
+RAG_BOTH_K = 6
+RAG_FINAL_K = 4
+RAG_SCORE_THRESHOLD = 0.32
+RAG_MAX_SOURCE_LINES = 4
 
 FINANCE_NAMESPACES = ["finance", "cal_guide", "edu_material"]
 
@@ -68,62 +48,40 @@ ROUTER_SYSTEM_PROMPT = """
 """.strip()
 
 
-def parse_csv_env(name: str, default: list[str]) -> list[str]:
-    raw_value = get_config_value(name, "")
-    if not raw_value:
-        return default
-    values = [item.strip() for item in raw_value.split(",") if item.strip()]
-    return values or default
-
-
-def int_env(name: str, default: int) -> int:
-    try:
-        return int(get_config_value(name, str(default)))
-    except (TypeError, ValueError):
-        return default
-
-
-def float_env(name: str, default: float) -> float:
-    try:
-        return float(get_config_value(name, str(default)))
-    except (TypeError, ValueError):
-        return default
-
-
 def get_google_sheet_main_name() -> str:
-    return get_config_value("GOOGLE_SHEET_MAIN_NAME", GOOGLE_SHEET_MAIN_DEFAULT_NAME)
+    return GOOGLE_SHEET_MAIN_NAME
 
 
 def get_google_sheet_backup_name() -> str:
-    return get_config_value("GOOGLE_SHEET_BACKUP_NAME", GOOGLE_SHEET_BACKUP_DEFAULT_NAME)
+    return GOOGLE_SHEET_BACKUP_NAME
 
 
 def get_pinecone_index_name() -> str:
-    return get_config_value("PINECONE_INDEX_NAME", PINECONE_DEFAULT_INDEX_NAME)
+    return PINECONE_INDEX_NAME
 
 
 def get_pinecone_namespaces() -> list[str]:
-    return parse_csv_env("PINECONE_NAMESPACES", PINECONE_DEFAULT_NAMESPACES)
+    return PINECONE_NAMESPACES
 
 
 def get_rag_route_k() -> int:
-    return int_env("RAG_ROUTE_K", 8)
+    return RAG_ROUTE_K
 
 
 def get_rag_both_k() -> int:
-    return int_env("RAG_BOTH_K", 6)
+    return RAG_BOTH_K
 
 
 def get_rag_final_k() -> int:
-    return int_env("RAG_FINAL_K", 4)
+    return RAG_FINAL_K
 
 
 def get_rag_score_threshold() -> float:
-    return float_env("RAG_SCORE_THRESHOLD", 0.32)
+    return RAG_SCORE_THRESHOLD
 
 
 def get_rag_max_source_lines() -> int:
-    return max(1, int_env("RAG_MAX_SOURCE_LINES", 4))
+    return max(1, RAG_MAX_SOURCE_LINES)
 
 
 answer_examples = [
