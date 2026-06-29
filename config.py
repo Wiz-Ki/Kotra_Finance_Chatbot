@@ -6,17 +6,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-PINECONE_DEFAULT_INDEX_NAME = "finance-index-v2"
+def get_config_value(name: str, default: str) -> str:
+    env_value = os.getenv(name)
+    if env_value:
+        return env_value
 
-PINECONE_DEFAULT_NAMESPACES = [
-    "cal_guide",
-    "edu_material",
-    "public_official_conflict_interest_act",
-    "improper_solicitation_graft_act",
-    "workplace_human_rights_guideline",
-    "kotra_conflict_interest_guideline",
-    "kotra_code_of_conduct",
-]
+    try:
+        import streamlit as st
+
+        secret_value = st.secrets.get(name)
+        if secret_value:
+            return str(secret_value)
+    except Exception:
+        pass
+
+    return default
+
+
+PINECONE_DEFAULT_INDEX_NAME = "kotra-finance-chatbot"
+
+GOOGLE_SHEET_MAIN_DEFAULT_NAME = "정산챗봇로그"
+GOOGLE_SHEET_BACKUP_DEFAULT_NAME = "정산챗봇로그_백업용"
+
+PINECONE_DEFAULT_NAMESPACES = ["finance", "esg"]
 
 FINANCE_NAMESPACES = ["finance", "cal_guide", "edu_material"]
 
@@ -57,7 +69,7 @@ ROUTER_SYSTEM_PROMPT = """
 
 
 def parse_csv_env(name: str, default: list[str]) -> list[str]:
-    raw_value = os.getenv(name)
+    raw_value = get_config_value(name, "")
     if not raw_value:
         return default
     values = [item.strip() for item in raw_value.split(",") if item.strip()]
@@ -66,20 +78,28 @@ def parse_csv_env(name: str, default: list[str]) -> list[str]:
 
 def int_env(name: str, default: int) -> int:
     try:
-        return int(os.getenv(name, default))
+        return int(get_config_value(name, str(default)))
     except (TypeError, ValueError):
         return default
 
 
 def float_env(name: str, default: float) -> float:
     try:
-        return float(os.getenv(name, default))
+        return float(get_config_value(name, str(default)))
     except (TypeError, ValueError):
         return default
 
 
+def get_google_sheet_main_name() -> str:
+    return get_config_value("GOOGLE_SHEET_MAIN_NAME", GOOGLE_SHEET_MAIN_DEFAULT_NAME)
+
+
+def get_google_sheet_backup_name() -> str:
+    return get_config_value("GOOGLE_SHEET_BACKUP_NAME", GOOGLE_SHEET_BACKUP_DEFAULT_NAME)
+
+
 def get_pinecone_index_name() -> str:
-    return os.getenv("PINECONE_INDEX_NAME", PINECONE_DEFAULT_INDEX_NAME)
+    return get_config_value("PINECONE_INDEX_NAME", PINECONE_DEFAULT_INDEX_NAME)
 
 
 def get_pinecone_namespaces() -> list[str]:

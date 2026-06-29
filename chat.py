@@ -5,7 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from config import get_rag_max_source_lines
+from config import (
+    get_google_sheet_backup_name,
+    get_google_sheet_main_name,
+    get_rag_max_source_lines,
+)
 from llm import get_ai_response
 
 # 구글 시트 및 피드백 관련 라이브러리
@@ -102,13 +106,12 @@ def get_google_sheet():
         creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
         client = gspread.authorize(creds)
         
-        # 1. 원본 시트 연결 (기존 파일)
-        sheet_main = client.open("정산챗봇로그").sheet1
+        # 1. 원본 시트 연결
+        sheet_main = client.open(get_google_sheet_main_name()).sheet1
         
         # 2. 백업 시트 연결 (수정된 파일명 반영)
         try:
-            # 여기가 수정되었습니다!
-            sheet_backup = client.open("정산챗봇로그_백업용").sheet1
+            sheet_backup = client.open(get_google_sheet_backup_name()).sheet1
         except Exception as e:
             print(f"백업 시트 연결 실패: {e}")
             sheet_backup = None
