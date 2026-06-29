@@ -1,6 +1,9 @@
+import json
+import re
+
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, FewShotChatMessagePromptTemplate, PromptTemplate
-from langchain.chains import create_retrieval_chain, create_history_aware_retriever
+from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_openai import ChatOpenAI 
 from langchain_openai import OpenAIEmbeddings 
@@ -8,58 +11,75 @@ from langchain_pinecone import PineconeVectorStore
 #from langchain.chains import RetrievalQA 
 #from langchain import hub 
 
-from langchain_core.retrievers import BaseRetriever   
 from langchain.schema import Document   
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.runnables import RunnableLambda
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
-from config import answer_examples
+from config import (
+    ESG_NAMESPACES,
+    FINANCE_NAMESPACES,
+    ROUTER_SYSTEM_PROMPT,
+    answer_examples,
+    get_pinecone_index_name,
+    get_pinecone_namespaces,
+    get_rag_both_k,
+    get_rag_final_k,
+    get_rag_route_k,
+    get_rag_score_threshold,
+)
  
 
 # 세션 기록 저장소
 store = {}
 
-# Pinecone index 내의 문서군별 namespace
-PINECONE_NAMESPACES = [
-    "cal_guide",
-    "edu_material",
-    "public_official_conflict_interest_act",
-    "improper_solicitation_graft_act",
-    "workplace_human_rights_guideline",
-    "kotra_conflict_interest_guideline",
-    "kotra_code_of_conduct",
-]
 
-
-class MultiNamespaceRetriever(BaseRetriever):
+class MultiNamespaceRetriever:
     """
-    질문을 한 번만 임베딩한 뒤 모든 namespace를 검색하고,
+    Router가 고른 namespace 범위에서 질문을 한 번 임베딩한 뒤 검색하고,
     유사도 점수가 높은 문서를 합쳐서 반환하는 Retriever.
     """
-    vectorstore: Any
-    embedding: Any
-    namespaces: List[str]
-    per_namespace_k: int = 3
-    final_k: int = 3
-    score_threshold: float = 0.35
 
-    def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
+    def __init__(
+        self,
+        vectorstore: Any,
+        embedding: Any,
+        namespaces: List[str],
+        route_k: int = 8,
+        both_k: int = 6,
+        final_k: int = 4,
+        score_threshold: float = 0.32,
+    ) -> None:
+        self.vectorstore = vectorstore
+        self.embedding = embedding
+        self.namespaces = namespaces
+        self.route_k = route_k
+        self.both_k = both_k
+        self.final_k = final_k
+        self.score_threshold = score_threshold
+
+    def get_relevant_documents(self, query: str, route_info: Dict[str, Any]) -> List[Document]:
         query_vector = self.embedding.embed_query(query)
         scored_documents: List[Tuple[Document, float]] = []
+        route = normalize_route(route_info.get("route"))
 
-        for namespace in self.namespaces:
+        for namespace, k in self._search_plan(route):
             namespace_results = self.vectorstore.similarity_search_by_vector_with_score(
                 query_vector,
-                k=self.per_namespace_k,
+                k=k,
                 namespace=namespace,
             )
             for document, score in namespace_results:
                 if score < self.score_threshold:
                     continue
-                document.metadata.setdefault("namespace", namespace)
+                document.metadata["namespace"] = namespace
+                document.metadata["retrieval_score"] = float(score)
+                document.metadata["router_route"] = route
+                document.metadata["router_confidence"] = route_info.get("confidence", 0.0)
+                document.metadata["rewritten_query"] = query
                 scored_documents.append((document, score))
 
         # 모든 namespace가 같은 index/metric을 사용하므로 유사도를 통합 정렬한다.
@@ -68,7 +88,7 @@ class MultiNamespaceRetriever(BaseRetriever):
         documents = []
         seen_ids = set()
         for document, _ in scored_documents:
-            document_id = document.id or document.metadata.get("chunk_id")
+            document_id = document.id or document.metadata.get("chunk_id") or document.metadata.get("pinecone_id")
             deduplication_key = document_id or document.page_content
             if deduplication_key in seen_ids:
                 continue
@@ -79,14 +99,76 @@ class MultiNamespaceRetriever(BaseRetriever):
 
         return documents
 
+    def _search_plan(self, route: str) -> List[Tuple[str, int]]:
+        if route == "finance":
+            routed_namespaces = self._matching_namespaces(FINANCE_NAMESPACES)
+            k = self.route_k
+        elif route == "esg":
+            routed_namespaces = self._matching_namespaces(ESG_NAMESPACES)
+            k = self.route_k
+        else:
+            routed_namespaces = self._matching_namespaces(FINANCE_NAMESPACES + ESG_NAMESPACES)
+            k = self.both_k
+
+        if not routed_namespaces:
+            routed_namespaces = self.namespaces
+
+        return [(namespace, k) for namespace in routed_namespaces]
+
+    def _matching_namespaces(self, candidates: List[str]) -> List[str]:
+        candidate_set = set(candidates)
+        return [namespace for namespace in self.namespaces if namespace in candidate_set]
+
+
+def normalize_route(value: Any) -> str:
+    route = str(value or "both").strip().lower()
+    if route not in {"finance", "esg", "both"}:
+        return "both"
+    return route
+
+
+def parse_router_output(raw_output: str, fallback_query: str) -> Dict[str, Any]:
+    cleaned = raw_output.strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return {
+            "route": "both",
+            "rewritten_query": fallback_query,
+            "confidence": 0.0,
+        }
+
+    route = normalize_route(parsed.get("route"))
+    rewritten_query = str(parsed.get("rewritten_query") or fallback_query).strip()
+    if not rewritten_query:
+        rewritten_query = fallback_query
+
+    try:
+        confidence = float(parsed.get("confidence", 0.0))
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    confidence = max(0.0, min(1.0, confidence))
+    return {
+        "route": route,
+        "rewritten_query": rewritten_query,
+        "confidence": confidence,
+    }
+
+
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     if session_id not in store:
         store[session_id] = ChatMessageHistory()
     return store[session_id]
 
+
 def get_retriever():
     embedding = OpenAIEmbeddings(model='text-embedding-3-large')
-    index_name = 'finance-index-v2'
+    index_name = get_pinecone_index_name()
+    namespaces = get_pinecone_namespaces()
     
     # Pinecone 연결
     database = PineconeVectorStore.from_existing_index(
@@ -97,41 +179,43 @@ def get_retriever():
     namespace_retriever = MultiNamespaceRetriever(
         vectorstore=database,
         embedding=embedding,
-        namespaces=PINECONE_NAMESPACES,
+        namespaces=namespaces,
+        route_k=get_rag_route_k(),
+        both_k=get_rag_both_k(),
+        final_k=get_rag_final_k(),
+        score_threshold=get_rag_score_threshold(),
     )
 
     return namespace_retriever
 
-def get_history_retriever():
+
+def get_router_retriever():
     llm = get_llm()
     retriever = get_retriever()
-   
-    contextualize_q_system_prompt = """
-# 작업
-대화 기록을 활용해 사용자의 최신 질문을 독립적인 한국어 검색문으로 재작성하세요.
-
-# 규칙
-- 문서명, 법률명, 조항 번호, 금액, 기한과 사용자의 핵심 조건을 유지하세요.
-- 대화에 없는 사실, 조건, 문서명을 추가하지 마세요.
-- 최신 질문이 이미 독립적이면 의미를 바꾸지 말고 그대로 반환하세요.
-- 질문에 답하지 마세요.
-
-# 출력
-독립적인 한국어 검색문 한 개만 출력하세요.
-""".strip()
-
-    contextualize_q_prompt = ChatPromptTemplate.from_messages(
+    router_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", contextualize_q_system_prompt),
+            ("system", ROUTER_SYSTEM_PROMPT),
             MessagesPlaceholder("chat_history"),
             ("human", "{input}"),
         ]
     )
-    
-    history_aware_retriever = create_history_aware_retriever(
-        llm, retriever, contextualize_q_prompt
-    )
-    return history_aware_retriever
+    router_chain = router_prompt | llm | StrOutputParser()
+
+    def route_and_retrieve(inputs: Dict[str, Any]) -> List[Document]:
+        user_query = str(inputs.get("input", "")).strip()
+        raw_router_output = router_chain.invoke(
+            {
+                "input": user_query,
+                "chat_history": inputs.get("chat_history", []),
+            }
+        )
+        route_info = parse_router_output(raw_router_output, fallback_query=user_query)
+        return retriever.get_relevant_documents(
+            route_info["rewritten_query"],
+            route_info,
+        )
+
+    return RunnableLambda(route_and_retrieve)
     
     
 def get_llm(model = 'gpt-5.1'):
@@ -195,7 +279,7 @@ def get_rag_chain(): # 챗봇의 엔진
             ("human", "{input}"),
         ]
     )
-    history_aware_retriever = get_history_retriever() # 대화 맥락을 이해하는 '스마트 검색기'
+    router_retriever = get_router_retriever() # 대화 맥락을 반영해 검색 경로와 검색문을 결정하는 검색기
 
     document_prompt = PromptTemplate.from_template(
         '<document source="{origin_pdf}" location="{page_num}" namespace="{namespace}">\n'
@@ -210,7 +294,7 @@ def get_rag_chain(): # 챗봇의 엔진
         document_prompt=document_prompt 
     )
 
-    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+    rag_chain = create_retrieval_chain(router_retriever, question_answer_chain)
     
     conversational_rag_chain = RunnableWithMessageHistory(
         rag_chain,

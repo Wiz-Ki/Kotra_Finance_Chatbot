@@ -1,3 +1,111 @@
+import os
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+
+PINECONE_DEFAULT_INDEX_NAME = "finance-index-v2"
+
+PINECONE_DEFAULT_NAMESPACES = [
+    "cal_guide",
+    "edu_material",
+    "public_official_conflict_interest_act",
+    "improper_solicitation_graft_act",
+    "workplace_human_rights_guideline",
+    "kotra_conflict_interest_guideline",
+    "kotra_code_of_conduct",
+]
+
+FINANCE_NAMESPACES = ["finance", "cal_guide", "edu_material"]
+
+ESG_NAMESPACES = [
+    "esg",
+    "public_official_conflict_interest_act",
+    "improper_solicitation_graft_act",
+    "workplace_human_rights_guideline",
+    "kotra_conflict_interest_guideline",
+    "kotra_code_of_conduct",
+]
+
+ROUTER_SYSTEM_PROMPT = """
+# 작업
+대화 기록과 사용자의 최신 질문을 보고 RAG 검색 계획을 JSON으로 작성하세요.
+
+# 출력 JSON
+반드시 아래 키만 포함하는 JSON 객체 하나만 출력하세요.
+{
+  "route": "finance" | "esg" | "both",
+  "rewritten_query": "검색에 사용할 독립적인 한국어 질문",
+  "confidence": 0.0
+}
+
+# 라우팅 기준
+- finance: 재무 정산, 전도자금, 공용카드, ERP, 계좌, 장부, 영수증, 출장비, 식비, 비목, 운영비, 전표, 자금 집행.
+- esg: 윤리, 준법, 이해충돌, 청탁금지, 금품/선물 수수, 외부강의, 행동강령, 괴롭힘, 인권침해, 신고/회피/반환 절차.
+- both: 재무 처리와 윤리·준법 판단이 모두 필요하거나, 어느 쪽인지 애매한 질문.
+
+# 재작성 규칙
+- 사용자의 핵심 명사, 조건, 문서명, 조항 번호, 금액, 기한을 유지하세요.
+- 질문에 없는 제도명, 조건, 금액, 절차를 추측해서 추가하지 마세요.
+- 대명사나 생략 표현은 대화 기록에서 확인되는 범위에서만 보완하세요.
+- 애매하거나 복합적이면 route는 반드시 "both"로 선택하세요.
+- confidence는 라우팅 판단에 대한 내부 참고값입니다. 0.0부터 1.0까지 숫자로 출력하세요.
+- JSON 외의 설명, 마크다운, 코드블록을 출력하지 마세요.
+""".strip()
+
+
+def parse_csv_env(name: str, default: list[str]) -> list[str]:
+    raw_value = os.getenv(name)
+    if not raw_value:
+        return default
+    values = [item.strip() for item in raw_value.split(",") if item.strip()]
+    return values or default
+
+
+def int_env(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def float_env(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def get_pinecone_index_name() -> str:
+    return os.getenv("PINECONE_INDEX_NAME", PINECONE_DEFAULT_INDEX_NAME)
+
+
+def get_pinecone_namespaces() -> list[str]:
+    return parse_csv_env("PINECONE_NAMESPACES", PINECONE_DEFAULT_NAMESPACES)
+
+
+def get_rag_route_k() -> int:
+    return int_env("RAG_ROUTE_K", 8)
+
+
+def get_rag_both_k() -> int:
+    return int_env("RAG_BOTH_K", 6)
+
+
+def get_rag_final_k() -> int:
+    return int_env("RAG_FINAL_K", 4)
+
+
+def get_rag_score_threshold() -> float:
+    return float_env("RAG_SCORE_THRESHOLD", 0.32)
+
+
+def get_rag_max_source_lines() -> int:
+    return max(1, int_env("RAG_MAX_SOURCE_LINES", 4))
+
+
 answer_examples = [
     {
         "input": "공용카드를 추가로 발급받으려면 어떻게 해야 해?",
