@@ -2,6 +2,10 @@ import re
 from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
+
+load_dotenv()
+
+from config import get_rag_max_source_lines
 from llm import get_ai_response
 
 # 구글 시트 및 피드백 관련 라이브러리
@@ -259,8 +263,6 @@ if not check_login():
 st.title("💰해외무역관 AI 정산도우미")
 st.caption(f"환영합니다! **{st.session_state.user_branch}** 담당자님 👋 서비스 개선을 위해 답변 하단의 **[좋아요👍/싫어요👎]** 선택 후 SUBMIT을 꼭 눌러주세요!")
 
-load_dotenv()
-
 if "user_session_id" not in st.session_state:
     st.session_state.user_session_id = str(uuid.uuid4())
 
@@ -457,11 +459,16 @@ if (
                         pages_by_origin[origin].append(page_token)
                 if origins_order:
                     source_lines = []
+                    max_source_lines = get_rag_max_source_lines()
                     for origin in origins_order:
                         pages = _dedup_preserve_order(pages_by_origin.get(origin, []))
                         if not pages: continue
                         for page in pages:
                             source_lines.append(f"- ({origin}) {page}")
+                            if len(source_lines) >= max_source_lines:
+                                break
+                        if len(source_lines) >= max_source_lines:
+                            break
                     if source_lines:
                         source_info = "📄출처:\n\n" + "\n".join(source_lines)
                     else:
