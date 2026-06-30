@@ -27,11 +27,11 @@ ROUTER_SYSTEM_PROMPT = """
 
 # 출력 JSON
 반드시 아래 키만 포함하는 JSON 객체 하나만 출력하세요.
-{
+{{
   "route": "finance" | "esg" | "both",
   "rewritten_query": "검색에 사용할 독립적인 한국어 질문",
   "confidence": 0.0
-}
+}}
 
 # 라우팅 기준
 - finance: 재무 정산, 전도자금, 공용카드, ERP, 계좌, 장부, 영수증, 출장비, 식비, 비목, 운영비, 전표, 자금 집행.
