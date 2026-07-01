@@ -10,6 +10,9 @@ RAG_FINAL_K = 4
 RAG_SCORE_THRESHOLD = 0.32
 RAG_MAX_SOURCE_LINES = 4
 
+CHAT_HISTORY_SESSION_TTL_SECONDS = 3 * 60 * 60
+CHAT_HISTORY_MAX_TURNS = 10
+
 FINANCE_NAMESPACES = ["finance", "cal_guide", "edu_material"]
 
 ESG_NAMESPACES = [
@@ -82,6 +85,14 @@ def get_rag_score_threshold() -> float:
 
 def get_rag_max_source_lines() -> int:
     return max(1, RAG_MAX_SOURCE_LINES)
+
+
+def get_chat_history_session_ttl_seconds() -> int:
+    return max(60, CHAT_HISTORY_SESSION_TTL_SECONDS)
+
+
+def get_chat_history_max_turns() -> int:
+    return max(1, CHAT_HISTORY_MAX_TURNS)
 
 
 answer_examples = [

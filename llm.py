@@ -1,5 +1,6 @@
 import json
 import re
+from time import time
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, FewShotChatMessagePromptTemplate, PromptTemplate
@@ -12,7 +13,7 @@ from langchain_pinecone import PineconeVectorStore
 #from langchain import hub 
 
 from langchain.schema import Document   
-from typing import Any, Dict, List, Tuple
+from typing import Any, ClassVar, Dict, List, Sequence, Tuple
 
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
@@ -24,6 +25,8 @@ from config import (
     FINANCE_NAMESPACES,
     ROUTER_SYSTEM_PROMPT,
     answer_examples,
+    get_chat_history_max_turns,
+    get_chat_history_session_ttl_seconds,
     get_pinecone_index_name,
     get_pinecone_namespaces,
     get_rag_both_k,
@@ -35,6 +38,36 @@ from config import (
 
 # 세션 기록 저장소
 store = {}
+session_last_seen = {}
+
+
+class BoundedChatMessageHistory(ChatMessageHistory):
+    max_messages: ClassVar[int] = get_chat_history_max_turns() * 2
+
+    def add_message(self, message: Any) -> None:
+        super().add_message(message)
+        self._trim_messages()
+
+    def add_messages(self, messages: Sequence[Any]) -> None:
+        self.messages.extend(messages)
+        self._trim_messages()
+
+    def _trim_messages(self) -> None:
+        if len(self.messages) > self.max_messages:
+            del self.messages[:-self.max_messages]
+
+
+def cleanup_expired_sessions(current_time: float) -> None:
+    session_ttl = get_chat_history_session_ttl_seconds()
+    expired_session_ids = [
+        session_id
+        for session_id, last_seen in session_last_seen.items()
+        if current_time - last_seen > session_ttl
+    ]
+
+    for session_id in expired_session_ids:
+        store.pop(session_id, None)
+        session_last_seen.pop(session_id, None)
 
 
 class MultiNamespaceRetriever:
@@ -160,8 +193,12 @@ def parse_router_output(raw_output: str, fallback_query: str) -> Dict[str, Any]:
 
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
+    current_time = time()
+    cleanup_expired_sessions(current_time)
+    session_last_seen[session_id] = current_time
+
     if session_id not in store:
-        store[session_id] = ChatMessageHistory()
+        store[session_id] = BoundedChatMessageHistory()
     return store[session_id]
 
 
