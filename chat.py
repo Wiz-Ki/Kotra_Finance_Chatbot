@@ -46,6 +46,19 @@ def load_runtime_config():
 
 load_runtime_config()
 
+
+def local_login_bypass_enabled():
+    local_secrets_path = APP_DIR / ".streamlit" / "secrets.toml"
+    if not local_secrets_path.exists():
+        return False
+    try:
+        return (
+            st.secrets.get("APP_ENV") == "local"
+            and bool(st.secrets.get("LOCAL_BYPASS_LOGIN", False))
+        )
+    except Exception:
+        return False
+
 # --------------------------------------------------------------------------
 # [설정] 무역관별 시간대 매핑 (전체 무역관 리스트 반영)
 # --------------------------------------------------------------------------
@@ -244,6 +257,11 @@ def check_login():
         st.session_state["login_success"] = False
     if "user_branch" not in st.session_state:
         st.session_state["user_branch"] = ""
+
+    if local_login_bypass_enabled():
+        st.session_state["login_success"] = True
+        st.session_state["user_branch"] = str(st.secrets.get("LOCAL_BYPASS_BRANCH", "본사"))
+        return True
 
     if st.session_state["login_success"]:
         return True
@@ -459,7 +477,7 @@ if (
         with loading_spacer:
             st.markdown('<div style="height: 100px;"></div>', unsafe_allow_html=True)
             
-        ai_response_stream = get_ai_response(user_question)
+        ai_response_stream = get_ai_response(user_question, st.session_state.user_session_id)
         full_answer = ""
         source_info = None
         origins_order = []
