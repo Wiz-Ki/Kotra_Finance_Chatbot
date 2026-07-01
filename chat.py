@@ -477,7 +477,7 @@ if (
         with loading_spacer:
             st.markdown('<div style="height: 100px;"></div>', unsafe_allow_html=True)
             
-        ai_response_stream = get_ai_response(user_question)
+        ai_response_stream = get_ai_response(user_question, st.session_state.user_session_id)
         full_answer = ""
         source_info = None
         origins_order = []

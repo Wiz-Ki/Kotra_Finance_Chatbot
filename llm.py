@@ -307,14 +307,14 @@ def get_rag_chain(): # 챗봇의 엔진
     return conversational_rag_chain
     
 
-def get_ai_response(user_message): # 1. 챗봇의 시작: 사용자 질문을 받음
+def get_ai_response(user_message, session_id): # 1. 챗봇의 시작: 사용자 질문을 받음
     qa_chain = get_rag_chain()     # 2. 챗봇의 핵심 기능(RAG Chain)을 불러옵니다. 
     ai_response = qa_chain.stream( # 3. 사용자 메시지를 넣어 답변을 스트리밍 방식으로 받습니다.
         {
             "input": user_message
         },
         config={
-            "configurable": {"session_id": "abc123"} # 4. 대화 세션을 지정합니다.
+            "configurable": {"session_id": session_id} # 4. 대화 세션을 지정합니다.
         },
     )
     return ai_response # 답변이 생성되는 대로 바로바로 UI에 전달
